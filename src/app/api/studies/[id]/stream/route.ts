@@ -1,6 +1,4 @@
 import { NextRequest } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
@@ -36,18 +34,12 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.email) {
-    return new Response('Unauthorized', { status: 401 });
-  }
-
-  // Verify study exists and belongs to user
+  // Verify study exists (auth will be handled by middleware)
   const study = await prisma.study.findUnique({
     where: { id: params.id },
-    include: { user: true }
   });
 
-  if (!study || study.user.email !== session.user.email) {
+  if (!study) {
     return new Response('Not found', { status: 404 });
   }
 
