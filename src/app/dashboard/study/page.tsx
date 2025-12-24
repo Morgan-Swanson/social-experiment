@@ -1,13 +1,32 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Loader2, Trash2 } from 'lucide-react';
 import { Play, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+
+const STORAGE_KEY = 'study-config';
+
+interface StudyConfig {
+  selectedDataset: string;
+  selectedClassifiers: string[];
+  selectedConstraint: string;
+  selectedModel: string;
+  temperature: number;
+  sampleSize: number;
+}
 
 export default function StudyPage() {
   const [datasets, setDatasets] = useState<any[]>([]);
@@ -23,6 +42,40 @@ export default function StudyPage() {
   const [sampleSize, setSampleSize] = useState(100);
   const [maxRows, setMaxRows] = useState(100);
   const [expandedErrors, setExpandedErrors] = useState<Set<string>>(new Set());
+  const [isFlashing, setIsFlashing] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [studyToDelete, setStudyToDelete] = useState<string | null>(null);
+
+  // Load config from localStorage on mount
+  useEffect(() => {
+    const savedConfig = localStorage.getItem(STORAGE_KEY);
+    if (savedConfig) {
+      try {
+        const config: StudyConfig = JSON.parse(savedConfig);
+        setSelectedDataset(config.selectedDataset || '');
+        setSelectedClassifiers(config.selectedClassifiers || []);
+        setSelectedConstraint(config.selectedConstraint || '');
+        setSelectedModel(config.selectedModel || 'gpt-4o');
+        setTemperature(config.temperature ?? 0.0);
+        setSampleSize(config.sampleSize || 100);
+      } catch (error) {
+        console.error('Failed to load saved config:', error);
+      }
+    }
+  }, []);
+
+  // Save config to localStorage whenever it changes
+  useEffect(() => {
+    const config: StudyConfig = {
+      selectedDataset,
+      selectedClassifiers,
+      selectedConstraint,
+      selectedModel,
+      temperature,
+      sampleSize,
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+  }, [selectedDataset, selectedClassifiers, selectedConstraint, selectedModel, temperature, sampleSize]);
 
   useEffect(() => {
     fetchData();
@@ -64,6 +117,10 @@ export default function StudyPage() {
   };
 
   const handleRunStudy = async () => {
+    // Trigger flash animation
+    setIsFlashing(true);
+    setTimeout(() => setIsFlashing(false), 600);
+
     const response = await fetch('/api/studies', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -80,7 +137,31 @@ export default function StudyPage() {
 
     if (response.ok) {
       fetchData();
+      // Configuration is retained - no reset
     }
+  };
+
+  const handleDeleteStudy = async () => {
+    if (!studyToDelete) return;
+
+    try {
+      const response = await fetch(`/api/studies/${studyToDelete}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        fetchData();
+        setDeleteDialogOpen(false);
+        setStudyToDelete(null);
+      }
+    } catch (error) {
+      console.error('Failed to delete study:', error);
+    }
+  };
+
+  const openDeleteDialog = (studyId: string) => {
+    setStudyToDelete(studyId);
+    setDeleteDialogOpen(true);
   };
 
   const handleDownloadResults = async (studyId: string) => {
@@ -160,17 +241,17 @@ export default function StudyPage() {
               {classifiers.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No classifiers available</p>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {classifiers.map((classifier) => (
-                    <div key={classifier.id} className="flex items-center space-x-2">
-                      <Checkbox
+                    <div key={classifier.id} className="flex items-center justify-between">
+                      <label htmlFor={classifier.id} className="text-sm cursor-pointer flex-1">
+                        {classifier.name}
+                      </label>
+                      <Switch
                         id={classifier.id}
                         checked={selectedClassifiers.includes(classifier.id)}
                         onCheckedChange={() => handleClassifierToggle(classifier.id)}
                       />
-                      <label htmlFor={classifier.id} className="text-sm cursor-pointer">
-                        {classifier.name}
-                      </label>
                     </div>
                   ))}
                 </div>
@@ -242,7 +323,7 @@ export default function StudyPage() {
             <Button
               onClick={handleRunStudy}
               disabled={!selectedDataset || selectedClassifiers.length === 0}
-              className="w-full"
+              className={`w-full transition-all ${isFlashing ? 'animate-pulse bg-primary/80' : ''}`}
             >
               <Play className="h-4 w-4 mr-2" />
               Run Study
@@ -335,6 +416,14 @@ export default function StudyPage() {
                             Re-run
                           </Button>
                         )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openDeleteDialog(study.id)}
+                          className="text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -344,6 +433,32 @@ export default function StudyPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Study</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this study? This action cannot be undone.
+              All results and data associated with this study will be permanently deleted.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteStudy}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
