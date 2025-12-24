@@ -104,6 +104,18 @@ jobs:
             -backend-config="dynamodb_table=$TF_LOCK_TABLE" \
             -backend-config="encrypt=true"
       
+      - name: Clean Up Orphaned DB Subnet Group
+        continue-on-error: true
+        run: |
+          echo "Checking for orphaned DB subnet group..."
+          if aws rds describe-db-subnet-groups --db-subnet-group-name social-experiment-db-subnet 2>/dev/null; then
+            echo "Found existing DB subnet group. Deleting to allow recreation..."
+            aws rds delete-db-subnet-group --db-subnet-group-name social-experiment-db-subnet || true
+            echo "DB subnet group deleted"
+          else
+            echo "No orphaned DB subnet group found"
+          fi
+      
       - name: Import Existing Resources
         working-directory: ./terraform
         continue-on-error: true
