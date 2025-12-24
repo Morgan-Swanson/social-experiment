@@ -4,7 +4,7 @@ import path from 'path';
 export default defineConfig({
   test: {
     globals: true,
-    environment: 'jsdom',
+    environment: 'node',
     setupFiles: ['./src/test/setup.ts'],
     coverage: {
       provider: 'v8',
@@ -21,9 +21,7 @@ export default defineConfig({
       ],
     },
     environmentMatchGlobs: [
-      // Use node environment for API route tests
-      ['src/app/api/**/*.test.ts', 'node'],
-      // Use jsdom for component tests
+      // Use jsdom only for component tests
       ['src/components/**/*.test.tsx', 'jsdom'],
     ],
   },
