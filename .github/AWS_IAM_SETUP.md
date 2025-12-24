@@ -115,15 +115,7 @@ You'll see:
 3. Secret: Paste your **Secret access key**
 4. Click **"Add secret"**
 
-### Step 4: Add OpenAI API Key
-
-1. Get your OpenAI API key from: https://platform.openai.com/api-keys
-2. Click **"New repository secret"**
-3. Name: `TF_VAR_openai_api_key`
-4. Secret: Paste your OpenAI API key (starts with sk-)
-5. Click **"Add secret"**
-
-### Step 5: Generate and Add NextAuth Secret
+### Step 4: Generate and Add NextAuth Secret
 
 1. Open Terminal and run:
    ```bash
@@ -135,13 +127,14 @@ You'll see:
 5. Secret: Paste the generated secret
 6. Click **"Add secret"**
 
-### Step 6: Verify All Secrets
+### Step 5: Verify All Secrets
 
-You should now have 4 repository secrets:
+You should now have 3 repository secrets:
 1. `AWS_ACCESS_KEY_ID`
 2. `AWS_SECRET_ACCESS_KEY`
-3. `TF_VAR_openai_api_key`
-4. `TF_VAR_nextauth_secret`
+3. `TF_VAR_nextauth_secret`
+
+**Note**: Users provide their own OpenAI API keys through the application interface. No infrastructure-level OpenAI key is needed.
 
 ## Part 4: Test the Setup
 

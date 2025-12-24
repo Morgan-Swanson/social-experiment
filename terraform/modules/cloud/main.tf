@@ -11,12 +11,6 @@ variable "aws_region" {
   default     = "us-east-1"
 }
 
-variable "openai_api_key" {
-  description = "OpenAI API key for classification"
-  type        = string
-  sensitive   = true
-}
-
 variable "github_repo" {
   description = "GitHub repository for Amplify deployment (format: username/repo)"
   type        = string
@@ -289,20 +283,6 @@ resource "aws_secretsmanager_secret_version" "database_url" {
   secret_string = "postgresql://${aws_db_instance.postgres.username}:${random_password.db_password.result}@${aws_db_instance.postgres.endpoint}/${aws_db_instance.postgres.db_name}"
 }
 
-resource "aws_secretsmanager_secret" "openai_key" {
-  name        = "${var.project_name}/openai-api-key"
-  description = "OpenAI API key for classification"
-
-  tags = {
-    Name = "${var.project_name}-openai-key"
-  }
-}
-
-resource "aws_secretsmanager_secret_version" "openai_key" {
-  secret_id     = aws_secretsmanager_secret.openai_key.id
-  secret_string = var.openai_api_key
-}
-
 resource "aws_secretsmanager_secret" "nextauth_secret" {
   name        = "${var.project_name}/nextauth-secret"
   description = "NextAuth secret for session encryption"
@@ -399,7 +379,6 @@ resource "aws_iam_role_policy" "amplify_secrets" {
         ]
         Resource = [
           aws_secretsmanager_secret.database_url.arn,
-          aws_secretsmanager_secret.openai_key.arn,
           aws_secretsmanager_secret.nextauth_secret.arn
         ]
       },

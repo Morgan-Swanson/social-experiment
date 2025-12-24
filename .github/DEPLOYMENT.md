@@ -20,8 +20,9 @@ Configure these in GitHub Settings > Secrets and variables > Actions:
 - `AWS_SECRET_ACCESS_KEY` - Your AWS secret access key
 
 ### Terraform Variables
-- `TF_VAR_openai_api_key` - OpenAI API key (from https://platform.openai.com/api-keys)
 - `TF_VAR_nextauth_secret` - Generate with: `openssl rand -base64 32`
+
+**Note**: Users provide their own OpenAI API keys through the application. No infrastructure-level key required.
 
 ## Setup Instructions
 
@@ -46,7 +47,6 @@ Configure these in GitHub Settings > Secrets and variables > Actions:
 # Add each secret:
 AWS_ACCESS_KEY_ID = <your-aws-access-key-id>
 AWS_SECRET_ACCESS_KEY = <your-aws-secret-access-key>
-TF_VAR_openai_api_key = <your-openai-api-key>
 TF_VAR_nextauth_secret = <generate-with-openssl-rand>
 ```
 
@@ -58,8 +58,9 @@ TF_VAR_nextauth_secret = <generate-with-openssl-rand>
 4. Click "Connect GitHub" and authorize
 5. Add environment variables from Secrets Manager:
    - DATABASE_URL
-   - OPENAI_API_KEY
    - NEXTAUTH_SECRET
+   
+   (Users provide their own OpenAI API keys through the app)
 6. Trigger first Amplify deployment
 
 ### 4. Subsequent Deployments

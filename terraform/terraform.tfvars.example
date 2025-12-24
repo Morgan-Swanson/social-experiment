@@ -16,10 +16,6 @@ github_repo = "Morgan-Swanson/social-experiment"
 # GitHub branch to deploy
 github_branch = "main"
 
-# OpenAI API key for classification
-# Get from: https://platform.openai.com/api-keys
-openai_api_key = "sk-..."
-
 # NextAuth secret for session encryption
 # Generate with: openssl rand -base64 32
 nextauth_secret = "your-super-secret-nextauth-key-here"
