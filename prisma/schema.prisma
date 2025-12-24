@@ -1,0 +1,187 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  name           String?
+  image          String?
+  emailVerified  DateTime?
+  hashedPassword String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  apiKeys       ApiKey[]
+  datasets      Dataset[]
+  classifiers   Classifier[]
+  constraints   ModelConstraint[]
+  studies       Study[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model ApiKey {
+  id          String   @id @default(cuid())
+  userId      String
+  provider    String   // "openai", "anthropic", etc.
+  keyHash     String   // Hashed API key
+  keyPreview  String   // Last 4 characters for display
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  lastUsedAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("api_keys")
+}
+
+model Dataset {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  filename    String
+  storageKey  String   // S3/MinIO key
+  rowCount    Int
+  columns     Json     // Array of column names
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  studies     Study[]
+
+  @@map("datasets")
+}
+
+model Classifier {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  prompt      String   @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  studyClassifiers  StudyClassifier[]
+
+  @@map("classifiers")
+}
+
+model ModelConstraint {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  rules       String   @db.Text // Global rules/constraints for model behavior
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  studies Study[]
+
+  @@map("model_constraints")
+}
+
+model Study {
+  id                  String   @id @default(cuid())
+  userId              String
+  name                String
+  description         String?
+  datasetId           String
+  modelConstraintId   String?
+  modelProvider       String   // "openai", etc.
+  modelName           String   // "gpt-4", "gpt-3.5-turbo", etc.
+  modelVersion        String?  // For future pinning feature
+  sampleSize          Int?     // Number of rows to process (null = all)
+  status              String   @default("draft") // draft, running, completed, failed
+  errorMessage        String?  @db.Text // Detailed error message when status is failed
+  runNumber           Int      @default(1) // Increments on each re-run
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  startedAt           DateTime?
+  completedAt         DateTime?
+
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dataset         Dataset           @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+  modelConstraint ModelConstraint?  @relation(fields: [modelConstraintId], references: [id], onDelete: SetNull)
+  
+  classifiers     StudyClassifier[]
+  results         StudyResult[]
+
+  @@map("studies")
+}
+
+// Junction table for many-to-many relationship between Studies and Classifiers
+model StudyClassifier {
+  id           String @id @default(cuid())
+  studyId      String
+  classifierId String
+
+  study      Study      @relation(fields: [studyId], references: [id], onDelete: Cascade)
+  classifier Classifier @relation(fields: [classifierId], references: [id], onDelete: Cascade)
+
+  @@unique([studyId, classifierId])
+  @@map("study_classifiers")
+}
+
+model StudyResult {
+  id              String   @id @default(cuid())
+  studyId         String
+  rowId           String   // Unique ID from the input CSV
+  rowData         Json     // Original row data
+  classifications Json     // Results from all classifiers: { classifierId: { score, response, ... } }
+  createdAt       DateTime @default(now())
+
+  study Study @relation(fields: [studyId], references: [id], onDelete: Cascade)
+
+  @@index([studyId])
+  @@map("study_results")
+}
