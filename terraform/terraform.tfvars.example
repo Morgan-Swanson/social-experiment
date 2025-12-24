@@ -1,6 +1,25 @@
-# Example Terraform variables file
-# Copy this to terraform.tfvars and adjust values
+# Terraform Variables for Production Beta Deployment
+# Copy this to terraform.tfvars and fill in your values
 
-environment  = "local"  # or "cloud"
+# Environment: "local" for development, "cloud" for AWS production
+environment = "cloud"
+
+# Project name (used for resource naming)
 project_name = "social-experiment"
-aws_region   = "us-east-1"
+
+# AWS region for deployment
+aws_region = "us-east-1"
+
+# GitHub repository (format: username/repo-name)
+github_repo = "Morgan-Swanson/social-experiment"
+
+# GitHub branch to deploy
+github_branch = "main"
+
+# OpenAI API key for classification
+# Get from: https://platform.openai.com/api-keys
+openai_api_key = "sk-..."
+
+# NextAuth secret for session encryption
+# Generate with: openssl rand -base64 32
+nextauth_secret = "your-super-secret-nextauth-key-here"
