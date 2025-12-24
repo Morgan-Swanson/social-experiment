@@ -1,4 +1,4 @@
-# Cloud module - AWS infrastructure
+# Cloud module - AWS infrastructure for beta production deployment
 
 variable "project_name" {
   description = "Project name used for resource naming"
@@ -9,6 +9,24 @@ variable "aws_region" {
   description = "AWS region"
   type        = string
   default     = "us-east-1"
+}
+
+variable "github_repo" {
+  description = "GitHub repository for Amplify deployment (format: username/repo)"
+  type        = string
+  default     = "Morgan-Swanson/social-experiment"
+}
+
+variable "github_branch" {
+  description = "GitHub branch to deploy"
+  type        = string
+  default     = "main"
+}
+
+variable "nextauth_secret" {
+  description = "NextAuth secret for session encryption (generate with: openssl rand -base64 32)"
+  type        = string
+  sensitive   = true
 }
 
 provider "aws" {
@@ -156,14 +174,19 @@ resource "aws_db_instance" "postgres" {
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.db.id]
 
+  # Single-AZ for beta cost optimization
+  multi_az = false
+
   backup_retention_period = 7
   backup_window          = "03:00-04:00"
   maintenance_window     = "mon:04:00-mon:05:00"
 
   skip_final_snapshot = true
+  publicly_accessible = true  # Allow Amplify to connect
 
   tags = {
-    Name = "${var.project_name}-db"
+    Name        = "${var.project_name}-db"
+    Environment = "beta"
   }
 }
 
@@ -245,6 +268,200 @@ resource "aws_iam_role_policy" "app_s3" {
   })
 }
 
+# AWS Secrets Manager - Store all credentials securely
+resource "aws_secretsmanager_secret" "database_url" {
+  name        = "${var.project_name}/database-url"
+  description = "PostgreSQL database connection string"
+
+  tags = {
+    Name = "${var.project_name}-database-url"
+  }
+}
+
+resource "aws_secretsmanager_secret_version" "database_url" {
+  secret_id = aws_secretsmanager_secret.database_url.id
+  secret_string = "postgresql://${aws_db_instance.postgres.username}:${random_password.db_password.result}@${aws_db_instance.postgres.endpoint}/${aws_db_instance.postgres.db_name}"
+}
+
+resource "aws_secretsmanager_secret" "nextauth_secret" {
+  name        = "${var.project_name}/nextauth-secret"
+  description = "NextAuth secret for session encryption"
+
+  tags = {
+    Name = "${var.project_name}-nextauth-secret"
+  }
+}
+
+resource "aws_secretsmanager_secret_version" "nextauth_secret" {
+  secret_id     = aws_secretsmanager_secret.nextauth_secret.id
+  secret_string = var.nextauth_secret
+}
+
+# CloudWatch Log Group for application logs
+resource "aws_cloudwatch_log_group" "app" {
+  name              = "/aws/amplify/${var.project_name}"
+  retention_in_days = 7
+
+  tags = {
+    Name = "${var.project_name}-logs"
+  }
+}
+
+# CloudWatch Alarms for monitoring
+resource "aws_cloudwatch_metric_alarm" "db_cpu" {
+  alarm_name          = "${var.project_name}-db-cpu-high"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/RDS"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "80"
+  alarm_description   = "Database CPU usage is too high"
+  alarm_actions       = []  # Add SNS topic ARN here for email notifications
+
+  dimensions = {
+    DBInstanceIdentifier = aws_db_instance.postgres.id
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "db_storage" {
+  alarm_name          = "${var.project_name}-db-storage-low"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = "1"
+  metric_name         = "FreeStorageSpace"
+  namespace           = "AWS/RDS"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "2000000000"  # 2GB in bytes
+  alarm_description   = "Database storage is running low"
+  alarm_actions       = []  # Add SNS topic ARN here for email notifications
+
+  dimensions = {
+    DBInstanceIdentifier = aws_db_instance.postgres.id
+  }
+}
+
+# IAM role for Amplify
+resource "aws_iam_role" "amplify" {
+  name = "${var.project_name}-amplify-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "amplify.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "amplify_backend" {
+  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess-Amplify"
+  role       = aws_iam_role.amplify.name
+}
+
+resource "aws_iam_role_policy" "amplify_secrets" {
+  name = "${var.project_name}-amplify-secrets"
+  role = aws_iam_role.amplify.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = [
+          aws_secretsmanager_secret.database_url.arn,
+          aws_secretsmanager_secret.nextauth_secret.arn
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          aws_s3_bucket.storage.arn,
+          "${aws_s3_bucket.storage.arn}/*"
+        ]
+      }
+    ]
+  })
+}
+
+# AWS Amplify App
+resource "aws_amplify_app" "main" {
+  name       = var.project_name
+  repository = "https://github.com/${var.github_repo}"
+
+  # Build settings for Next.js
+  build_spec = <<-EOT
+    version: 1
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            - npm ci
+        build:
+          commands:
+            - npm run build
+      artifacts:
+        baseDirectory: .next
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - node_modules/**/*
+          - .next/cache/**/*
+    EOT
+
+  # Environment variables
+  environment_variables = {
+    NEXTAUTH_URL          = "https://main.${aws_amplify_app.main.default_domain}"
+    AWS_REGION            = var.aws_region
+    AWS_S3_BUCKET         = aws_s3_bucket.storage.id
+    AWS_S3_REGION         = var.aws_region
+  }
+
+  # Custom rules for Next.js routing
+  custom_rule {
+    source = "/<*>"
+    status = "404"
+    target = "/index.html"
+  }
+
+  iam_service_role_arn = aws_iam_role.amplify.arn
+
+  tags = {
+    Name        = var.project_name
+    Environment = "beta"
+  }
+}
+
+resource "aws_amplify_branch" "main" {
+  app_id      = aws_amplify_app.main.id
+  branch_name = var.github_branch
+
+  framework = "Next.js - SSR"
+  stage     = "PRODUCTION"
+
+  enable_auto_build = true
+
+  tags = {
+    Name = "${var.project_name}-${var.github_branch}"
+  }
+}
+
 # Data sources
 data "aws_caller_identity" "current" {}
 
@@ -252,6 +469,11 @@ data "aws_caller_identity" "current" {}
 output "database_url" {
   value     = "postgresql://${aws_db_instance.postgres.username}:${random_password.db_password.result}@${aws_db_instance.postgres.endpoint}/${aws_db_instance.postgres.db_name}"
   sensitive = true
+}
+
+output "database_secret_arn" {
+  value       = aws_secretsmanager_secret.database_url.arn
+  description = "ARN of the database URL secret in Secrets Manager"
 }
 
 output "storage_endpoint" {
@@ -262,10 +484,48 @@ output "storage_bucket" {
   value = aws_s3_bucket.storage.id
 }
 
+output "amplify_app_id" {
+  value       = aws_amplify_app.main.id
+  description = "Amplify App ID"
+}
+
+output "amplify_default_domain" {
+  value       = "https://main.${aws_amplify_app.main.default_domain}"
+  description = "Amplify default domain URL"
+}
+
 output "vpc_id" {
   value = aws_vpc.main.id
 }
 
-output "db_instance_id" {
-  value = aws_db_instance.postgres.id
+output "db_instance_endpoint" {
+  value = aws_db_instance.postgres.endpoint
+}
+
+output "deployment_instructions" {
+  value = <<-EOT
+    
+    AWS Infrastructure Deployed Successfully!
+    
+    Next Steps:
+    1. Connect GitHub to Amplify (manual step in AWS Console):
+       - Go to: https://console.aws.amazon.com/amplify/home?region=${var.aws_region}#/${aws_amplify_app.main.id}
+       - Click "Connect GitHub" and authorize access
+       - Select repository: ${var.github_repo}
+       - Branch: ${var.github_branch}
+    
+    2. Add Amplify environment variables in AWS Console:
+       - DATABASE_URL: (retrieve from Secrets Manager: ${aws_secretsmanager_secret.database_url.name})
+       - OPENAI_API_KEY: (retrieve from Secrets Manager: ${aws_secretsmanager_secret.openai_key.name})
+       - NEXTAUTH_SECRET: (retrieve from Secrets Manager: ${aws_secretsmanager_secret.nextauth_secret.name})
+    
+    3. Deploy the application:
+       - Amplify will auto-deploy on push to ${var.github_branch}
+       - Or manually trigger deployment in Amplify Console
+    
+    4. Access your application:
+       - URL: https://main.${aws_amplify_app.main.default_domain}
+    
+    Monthly Cost Estimate: $20-30 (excluding OpenAI API usage)
+  EOT
 }

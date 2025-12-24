@@ -1,0 +1,66 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  deploy:
+    name: Deploy to AWS Production
+    runs-on: ubuntu-latest
+    
+    env:
+      TF_VAR_environment: cloud
+      TF_VAR_project_name: social-experiment
+      TF_VAR_aws_region: us-east-1
+      TF_VAR_github_repo: Morgan-Swanson/social-experiment
+      TF_VAR_github_branch: main
+      TF_VAR_nextauth_secret: ${{ secrets.TF_VAR_nextauth_secret }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+      
+      - name: Terraform Init
+        working-directory: ./terraform
+        run: terraform init
+      
+      - name: Terraform Plan
+        working-directory: ./terraform
+        run: terraform plan -out=tfplan
+      
+      - name: Terraform Apply
+        working-directory: ./terraform
+        run: terraform apply -auto-approve tfplan
+      
+      - name: Output Deployment Info
+        working-directory: ./terraform
+        run: |
+          echo "## Deployment Complete! 🚀" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Infrastructure Outputs:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Amplify URL:** \`$(terraform output -raw amplify_default_domain)\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**S3 Bucket:** \`$(terraform output -raw storage_bucket)\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Database Endpoint:** \`$(terraform output -raw db_instance_endpoint)\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps:" >> $GITHUB_STEP_SUMMARY
+          echo "1. Connect GitHub to Amplify in AWS Console (first deployment only)" >> $GITHUB_STEP_SUMMARY
+          echo "2. Add environment variables to Amplify (check Secrets Manager)" >> $GITHUB_STEP_SUMMARY
+          echo "3. Trigger first Amplify deployment" >> $GITHUB_STEP_SUMMARY
