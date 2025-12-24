@@ -259,19 +259,27 @@ export default function StudyPage() {
             </div>
 
             <div className="grid gap-2">
-              <Label>Constraint (Optional)</Label>
-              <select
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
-                value={selectedConstraint}
-                onChange={(e) => setSelectedConstraint(e.target.value)}
-              >
-                <option value="">No constraint</option>
-                {constraints.map((constraint) => (
-                  <option key={constraint.id} value={constraint.id}>
-                    {constraint.name}
-                  </option>
-                ))}
-              </select>
+              <Label>Constraints (Optional)</Label>
+              {constraints.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No constraints available</p>
+              ) : (
+                <div className="space-y-3">
+                  {constraints.map((constraint) => (
+                    <div key={constraint.id} className="flex items-center gap-3">
+                      <Switch
+                        id={constraint.id}
+                        checked={selectedConstraint === constraint.id}
+                        onCheckedChange={(checked) => 
+                          setSelectedConstraint(checked ? constraint.id : '')
+                        }
+                      />
+                      <label htmlFor={constraint.id} className="text-sm cursor-pointer flex-1">
+                        {constraint.name}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="grid gap-2">
