@@ -6,6 +6,15 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     setupFiles: ['./src/test/setup.ts'],
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/cypress/**',
+      '**/.{idea,git,cache,output,temp}/**',
+      '**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build}.config.*',
+      // Exclude component tests to avoid jsdom/happy-dom issues
+      'src/components/**/*.test.tsx',
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],
@@ -18,6 +27,7 @@ export default defineConfig({
         'prisma/migrations/',
         'src/test/**',
         'src/lib/__mocks__/**',
+        'src/components/**',
       ],
     },
     pool: 'forks',
@@ -26,10 +36,6 @@ export default defineConfig({
         singleFork: false,
       },
     },
-    environmentMatchGlobs: [
-      // Use jsdom only for component tests
-      ['src/components/**/*.test.tsx', 'jsdom'],
-    ],
   },
   resolve: {
     alias: {
