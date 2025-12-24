@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import '@/app/globals.css';
 import { ChevronDown, ChevronUp, Loader2, Trash2 } from 'lucide-react';
 import { Play, Download } from 'lucide-react';
@@ -30,34 +31,19 @@ interface StudyConfig {
 }
 
 export default function StudyPage() {
+  const pathname = usePathname();
   const [datasets, setDatasets] = useState<any[]>([]);
   const [classifiers, setClassifiers] = useState<any[]>([]);
   const [constraints, setConstraints] = useState<any[]>([]);
   const [studies, setStudies] = useState<any[]>([]);
   const [configLoaded, setConfigLoaded] = useState(false);
   
-  // Initialize state from localStorage before rendering
-  const getInitialConfig = () => {
-    if (typeof window === 'undefined') return null;
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        return JSON.parse(saved) as StudyConfig;
-      } catch {
-        return null;
-      }
-    }
-    return null;
-  };
-
-  const initialConfig = getInitialConfig();
-  
-  const [selectedDataset, setSelectedDataset] = useState(initialConfig?.selectedDataset || '');
-  const [selectedClassifiers, setSelectedClassifiers] = useState<string[]>(initialConfig?.selectedClassifiers || []);
-  const [selectedConstraints, setSelectedConstraints] = useState<string[]>(initialConfig?.selectedConstraints || []);
-  const [selectedModel, setSelectedModel] = useState(initialConfig?.selectedModel || 'gpt-4o');
-  const [temperature, setTemperature] = useState(initialConfig?.temperature ?? 0.0);
-  const [sampleSize, setSampleSize] = useState(initialConfig?.sampleSize || 100);
+  const [selectedDataset, setSelectedDataset] = useState('');
+  const [selectedClassifiers, setSelectedClassifiers] = useState<string[]>([]);
+  const [selectedConstraints, setSelectedConstraints] = useState<string[]>([]);
+  const [selectedModel, setSelectedModel] = useState('gpt-4o');
+  const [temperature, setTemperature] = useState(0.0);
+  const [sampleSize, setSampleSize] = useState(100);
   const [maxRows, setMaxRows] = useState(100);
   const [expandedErrors, setExpandedErrors] = useState<Set<string>>(new Set());
   const [newStudyId, setNewStudyId] = useState<string | null>(null);
@@ -65,10 +51,28 @@ export default function StudyPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [studyToDelete, setStudyToDelete] = useState<string | null>(null);
 
-  // Mark config as loaded after mount
+  // Load config when navigating to this page
   useEffect(() => {
-    setConfigLoaded(true);
-  }, []);
+    const loadConfig = () => {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        try {
+          const config: StudyConfig = JSON.parse(saved);
+          setSelectedDataset(config.selectedDataset || '');
+          setSelectedClassifiers(config.selectedClassifiers || []);
+          setSelectedConstraints(config.selectedConstraints || []);
+          setSelectedModel(config.selectedModel || 'gpt-4o');
+          setTemperature(config.temperature ?? 0.0);
+          setSampleSize(config.sampleSize || 100);
+        } catch (error) {
+          console.error('Failed to load config:', error);
+        }
+      }
+      setConfigLoaded(true);
+    };
+    
+    loadConfig();
+  }, [pathname]); // Reload when pathname changes
 
   // Save config to localStorage whenever it changes (only after initial load)
   useEffect(() => {
