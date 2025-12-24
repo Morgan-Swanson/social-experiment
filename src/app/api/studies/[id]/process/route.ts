@@ -4,6 +4,7 @@ import { createStorageAdapter } from '@/lib/adapters/storage';
 import { createAIProvider } from '@/lib/adapters/ai-provider';
 import { decryptApiKey } from '@/lib/encryption';
 import Papa from 'papaparse';
+import { emitStreamEvent } from '../stream/route';
 
 export async function POST(
   request: NextRequest,
@@ -94,9 +95,12 @@ export async function POST(
       .filter(Boolean)
       .join('\n\n');
 
-    // Process each row
+    // Process each row with streaming updates
     const results = [];
-    for (const row of sampleData as any[]) {
+    const totalRows = sampleData.length;
+    
+    for (let i = 0; i < sampleData.length; i++) {
+      const row = sampleData[i] as any;
       const textColumn = Object.values(row).find(v => typeof v === 'string' && v.length > 10);
       const text = textColumn?.toString() || '';
 
@@ -108,11 +112,25 @@ export async function POST(
         study.temperature
       );
 
-      results.push({
+      const result = {
         studyId: study.id,
-        rowId: (row as any).id || JSON.stringify(row),
+        rowId: row.id || JSON.stringify(row),
         rowData: row,
         classifications,
+      };
+      
+      results.push(result);
+
+      // Emit streaming event for this row
+      emitStreamEvent(params.id, {
+        type: 'row_complete',
+        rowIndex: i,
+        totalRows,
+        progress: ((i + 1) / totalRows) * 100,
+        result: {
+          rowData: row,
+          classifications,
+        },
       });
     }
 
@@ -128,6 +146,12 @@ export async function POST(
         status: 'completed',
         completedAt: new Date(),
       },
+    });
+
+    // Emit completion event
+    emitStreamEvent(params.id, {
+      type: 'complete',
+      totalRows: results.length,
     });
 
     return NextResponse.json({ success: true, resultsCount: results.length });

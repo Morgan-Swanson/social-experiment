@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, Download } from 'lucide-react';
+import { ArrowLeft, Download, Activity } from 'lucide-react';
 
 export default function StudyResultsPage() {
   const params = useParams();
@@ -13,10 +13,86 @@ export default function StudyResultsPage() {
   const [results, setResults] = useState<any[]>([]);
   const [columns, setColumns] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [currentRow, setCurrentRow] = useState(0);
+  const [totalRows, setTotalRows] = useState(0);
+  const eventSourceRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
-    fetchResults();
+    fetchStudyStatus();
+    return () => {
+      // Cleanup SSE connection on unmount
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+      }
+    };
   }, [params.id]);
+
+  const fetchStudyStatus = async () => {
+    try {
+      // Fetch study metadata
+      const studyResponse = await fetch('/api/studies');
+      if (studyResponse.ok) {
+        const studies = await studyResponse.json();
+        const current = studies.find((s: any) => s.id === params.id);
+        setStudy(current);
+
+        // If study is running, start streaming
+        if (current?.status === 'running') {
+          startStreaming();
+        } else if (current?.status === 'completed') {
+          // Load completed results
+          fetchResults();
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch study status:', error);
+      setLoading(false);
+    }
+  };
+
+  const startStreaming = () => {
+    setIsStreaming(true);
+    setLoading(false);
+    
+    // Connect to SSE endpoint
+    const eventSource = new EventSource(`/api/studies/${params.id}/stream`);
+    eventSourceRef.current = eventSource;
+
+    eventSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+
+      if (data.type === 'connected') {
+        console.log('Connected to study stream');
+      } else if (data.type === 'row_complete') {
+        // Add new row to results
+        setCurrentRow(data.rowIndex + 1);
+        setTotalRows(data.totalRows);
+        setProgress(data.progress);
+        
+        setResults(prev => [...prev, data.result]);
+        
+        // Set columns from first result
+        if (data.rowIndex === 0 && data.result.rowData) {
+          const rowColumns = Object.keys(data.result.rowData);
+          const classifierColumns = Object.keys(data.result.classifications || {});
+          setColumns([...rowColumns, ...classifierColumns]);
+        }
+      } else if (data.type === 'complete') {
+        // Study completed, close stream and load final results
+        eventSource.close();
+        setIsStreaming(false);
+        fetchResults();
+      }
+    };
+
+    eventSource.onerror = () => {
+      eventSource.close();
+      setIsStreaming(false);
+      fetchResults(); // Fallback to regular fetch
+    };
+  };
 
   const fetchResults = async () => {
     try {
@@ -86,6 +162,44 @@ export default function StudyResultsPage() {
     );
   }
 
+  const renderResults = () => {
+    if (results.length === 0 && !isStreaming) {
+      return <p className="text-muted-foreground">No results yet.</p>;
+    }
+
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-xs">
+          <thead>
+            <tr className="border-b bg-muted/50">
+              {columns.map((col, i) => (
+                <th key={i} className="p-2 text-left font-medium whitespace-nowrap">
+                  {col}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {results.map((result, i) => (
+              <tr key={i} className="border-b hover:bg-muted/50">
+                {Object.keys(result.rowData || {}).map((key, j) => (
+                  <td key={j} className="p-2 whitespace-nowrap">
+                    {result.rowData[key]}
+                  </td>
+                ))}
+                {Object.keys(result.classifications || {}).map((classifierId, j) => (
+                  <td key={`class-${j}`} className="p-2 whitespace-nowrap">
+                    {result.classifications[classifierId]}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -109,34 +223,32 @@ export default function StudyResultsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Classification Results</CardTitle>
-          <CardDescription>{results.length} rows processed</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Classification Results</CardTitle>
+              <CardDescription>
+                {isStreaming ? (
+                  <span className="flex items-center gap-2 text-primary">
+                    <Activity className="h-4 w-4 animate-pulse" />
+                    Processing row {currentRow} of {totalRows} ({Math.round(progress)}%)
+                  </span>
+                ) : (
+                  `${results.length} rows processed`
+                )}
+              </CardDescription>
+            </div>
+            {isStreaming && (
+              <div className="w-48 bg-muted rounded-full h-2">
+                <div
+                  className="bg-primary h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-xs">
-              <thead>
-                <tr className="border-b bg-muted/50">
-                  {columns.map((col, i) => (
-                    <th key={i} className="p-2 text-left font-medium whitespace-nowrap">
-                      {col}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {results.map((row, i) => (
-                  <tr key={i} className="border-b hover:bg-muted/50">
-                    {columns.map((col, j) => (
-                      <td key={j} className="p-2 whitespace-nowrap">
-                        {row[col]}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {renderResults()}
         </CardContent>
       </Card>
     </div>
