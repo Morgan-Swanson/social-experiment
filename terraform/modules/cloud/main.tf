@@ -156,7 +156,7 @@ resource "random_password" "db_password" {
 resource "aws_db_instance" "postgres" {
   identifier     = "${var.project_name}-db"
   engine         = "postgres"
-  engine_version = "16.1"
+  engine_version = "16.4"
   instance_class = "db.t3.micro"
 
   allocated_storage     = 20
@@ -423,9 +423,9 @@ resource "aws_amplify_app" "main" {
 
   # Environment variables (add NEXTAUTH_URL, DATABASE_URL, and NEXTAUTH_SECRET manually in console)
   environment_variables = {
-    AWS_REGION            = var.aws_region
-    AWS_S3_BUCKET         = aws_s3_bucket.storage.id
-    AWS_S3_REGION         = var.aws_region
+    NEXT_PUBLIC_AWS_REGION    = var.aws_region
+    NEXT_PUBLIC_S3_BUCKET     = aws_s3_bucket.storage.id
+    NEXT_PUBLIC_S3_REGION     = var.aws_region
   }
 
   # Custom rules for Next.js routing
