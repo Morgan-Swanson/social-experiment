@@ -36,7 +36,7 @@ export async function GET(
 
     // Transform results to CSV format
     const rows = study.results.map(result => {
-      const row: any = { ...result.rowData };
+      const row: any = { ...(result.rowData as object || {}) };
       
       // Add classification scores
       const classifications = result.classifications as any;
