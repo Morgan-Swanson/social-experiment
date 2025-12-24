@@ -11,6 +11,9 @@ terraform {
       version = "~> 3.5"
     }
   }
+  
+  # S3 backend for state storage - configured via CLI flags in GitHub Actions
+  backend "s3" {}
 }
 
 # AWS Provider - configured at root level to work with module count
