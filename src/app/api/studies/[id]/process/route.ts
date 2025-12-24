@@ -127,6 +127,11 @@ export async function POST(
         classifications,
       };
       
+      // Save result immediately to database
+      await prisma.studyResult.create({
+        data: result,
+      });
+      
       results.push(result);
 
       // Update progress in database
@@ -140,11 +145,6 @@ export async function POST(
         },
       });
     }
-
-    // Save results
-    await prisma.studyResult.createMany({
-      data: results,
-    });
 
     // Update study status
     await prisma.study.update({
