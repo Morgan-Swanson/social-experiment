@@ -1,18 +1,21 @@
 import { vi } from 'vitest';
+import React from 'react';
 
+// Only setup jsdom-related mocks if in browser environment
 const isBrowser =
   typeof window !== 'undefined' && typeof document !== 'undefined';
 
-let React: any = null;
-
 if (isBrowser) {
-  const reactModule = await import('react');
-  React = reactModule.default ?? reactModule;
-
-  await import('@testing-library/jest-dom');
+  // Make React available globally for JSX transform in jsdom
   (globalThis as any).React = React;
+  
+  // Import jest-dom matchers
+  import('@testing-library/jest-dom').catch(() => {
+    // Ignore if not available
+  });
 }
 
+// Mock Next.js navigation (works in both node and jsdom environments)
 vi.mock('next/navigation', () => ({
   usePathname: vi.fn(() => '/dashboard'),
   useRouter: vi.fn(() => ({
@@ -29,36 +32,8 @@ vi.mock('next/navigation', () => ({
   notFound: vi.fn(),
 }));
 
-vi.mock('next/link', () => {
-  if (React) {
-    return {
-      default: ({ children, href, ...props }: any) =>
-        React.createElement('a', { href, ...props }, children),
-    };
-  }
-
-  return {
-    default: ({ children, href, ...props }: any) => ({
-      type: 'a',
-      props: { href, ...props, children },
-    }),
-  };
-});
-
-// Suppress console errors during tests (optional)
-const originalError = console.error;
-beforeAll(() => {
-  console.error = (...args: any[]) => {
-    if (
-      typeof args[0] === 'string' &&
-      args[0].includes('Warning: ReactDOM.render is no longer supported')
-    ) {
-      return;
-    }
-    originalError.call(console, ...args);
-  };
-});
-
-afterAll(() => {
-  console.error = originalError;
-});
+// Mock Next.js Link component
+vi.mock('next/link', () => ({
+  default: ({ children, href, ...props }: any) =>
+    React.createElement('a', { href, ...props }, children),
+}));

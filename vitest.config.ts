@@ -20,6 +20,12 @@ export default defineConfig({
         'src/lib/__mocks__/**',
       ],
     },
+    pool: 'forks',
+    poolOptions: {
+      forks: {
+        singleFork: false,
+      },
+    },
     environmentMatchGlobs: [
       // Use jsdom only for component tests
       ['src/components/**/*.test.tsx', 'jsdom'],
