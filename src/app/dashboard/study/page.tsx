@@ -382,7 +382,7 @@ export default function StudyPage() {
                     key={study.id} 
                     className="p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
                     onClick={() => {
-                      if (study.status === 'completed' || study.status === 'running') {
+                      if (study.status === 'completed' || study.status === 'running' || study.status === 'pending') {
                         window.location.href = `/dashboard/studies/${study.id}/results`;
                       }
                     }}
