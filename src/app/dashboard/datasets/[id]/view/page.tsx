@@ -98,11 +98,11 @@ export default function DatasetViewPage() {
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
+            <table className="w-full border-collapse text-xs">
               <thead>
                 <tr className="border-b bg-muted/50">
                   {columns.map((col, i) => (
-                    <th key={i} className="p-3 text-left font-medium">
+                    <th key={i} className="p-2 text-left font-medium">
                       {col}
                     </th>
                   ))}
@@ -112,7 +112,7 @@ export default function DatasetViewPage() {
                 {data.map((row, i) => (
                   <tr key={i} className="border-b hover:bg-muted/50">
                     {columns.map((col, j) => (
-                      <td key={j} className="p-3">
+                      <td key={j} className="p-2">
                         {row[col]}
                       </td>
                     ))}

@@ -114,7 +114,7 @@ export default function StudyResultsPage() {
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-sm">
+            <table className="w-full border-collapse text-xs">
               <thead>
                 <tr className="border-b bg-muted/50">
                   {columns.map((col, i) => (
