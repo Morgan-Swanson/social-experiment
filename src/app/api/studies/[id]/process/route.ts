@@ -4,7 +4,6 @@ import { createStorageAdapter } from '@/lib/adapters/storage';
 import { createAIProvider } from '@/lib/adapters/ai-provider';
 import { decryptApiKey } from '@/lib/encryption';
 import Papa from 'papaparse';
-import { emitStreamEvent } from '../stream/route';
 
 export async function POST(
   request: NextRequest,
@@ -49,6 +48,9 @@ export async function POST(
         status: 'running', 
         startedAt: new Date(),
         runNumber: isRerun ? (study.runNumber || 1) + 1 : (study.runNumber || 1),
+        currentRow: 0,
+        totalRows: 0,
+        progressPercent: 0,
       },
     });
 
@@ -95,9 +97,15 @@ export async function POST(
       .filter(Boolean)
       .join('\n\n');
 
-    // Process each row with streaming updates
+    // Process each row with progress tracking
     const results = [];
     const totalRows = sampleData.length;
+    
+    // Update total rows
+    await prisma.study.update({
+      where: { id: params.id },
+      data: { totalRows },
+    });
     
     for (let i = 0; i < sampleData.length; i++) {
       const row = sampleData[i] as any;
@@ -121,15 +129,14 @@ export async function POST(
       
       results.push(result);
 
-      // Emit streaming event for this row
-      emitStreamEvent(params.id, {
-        type: 'row_complete',
-        rowIndex: i,
-        totalRows,
-        progress: ((i + 1) / totalRows) * 100,
-        result: {
-          rowData: row,
-          classifications,
+      // Update progress in database
+      const currentRow = i + 1;
+      const progressPercent = (currentRow / totalRows) * 100;
+      await prisma.study.update({
+        where: { id: params.id },
+        data: {
+          currentRow,
+          progressPercent,
         },
       });
     }
@@ -145,13 +152,8 @@ export async function POST(
       data: {
         status: 'completed',
         completedAt: new Date(),
+        progressPercent: 100,
       },
-    });
-
-    // Emit completion event
-    emitStreamEvent(params.id, {
-      type: 'complete',
-      totalRows: results.length,
     });
 
     return NextResponse.json({ success: true, resultsCount: results.length });

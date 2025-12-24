@@ -17,14 +17,14 @@ export default function StudyResultsPage() {
   const [progress, setProgress] = useState(0);
   const [currentRow, setCurrentRow] = useState(0);
   const [totalRows, setTotalRows] = useState(0);
-  const eventSourceRef = useRef<EventSource | null>(null);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     fetchStudyStatus();
     return () => {
-      // Cleanup SSE connection on unmount
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
+      // Cleanup polling on unmount
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
       }
     };
   }, [params.id]);
@@ -38,9 +38,9 @@ export default function StudyResultsPage() {
         const current = studies.find((s: any) => s.id === params.id);
         setStudy(current);
 
-        // If study is running, start streaming
+        // If study is running, start polling
         if (current?.status === 'running') {
-          startStreaming();
+          startPolling();
         } else if (current?.status === 'completed') {
           // Load completed results
           fetchResults();
@@ -55,59 +55,44 @@ export default function StudyResultsPage() {
     }
   };
 
-  const startStreaming = () => {
+  const startPolling = () => {
     setIsStreaming(true);
     setLoading(false);
     
-    // Connect to SSE endpoint
-    const eventSource = new EventSource(`/api/studies/${params.id}/stream`);
-    eventSourceRef.current = eventSource;
-
-    // Add timeout to check if study completed while we were connecting
-    const timeoutId = setTimeout(() => {
-      // If we haven't received any row_complete events after 5 seconds, check status
-      if (results.length === 0) {
-        console.log('No streaming data received, checking if study completed');
-        fetchStudyStatus();
-      }
-    }, 5000);
-
-    eventSource.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-
-      if (data.type === 'connected') {
-        console.log('Connected to study stream');
-      } else if (data.type === 'row_complete') {
-        clearTimeout(timeoutId); // Clear timeout since we got data
-        
-        // Add new row to results
-        setCurrentRow(data.rowIndex + 1);
-        setTotalRows(data.totalRows);
-        setProgress(data.progress);
-        
-        setResults(prev => [...prev, data.result]);
-        
-        // Set columns from first result
-        if (data.rowIndex === 0 && data.result.rowData) {
-          const rowColumns = Object.keys(data.result.rowData);
-          const classifierColumns = Object.keys(data.result.classifications || {});
-          setColumns([...rowColumns, ...classifierColumns]);
+    // Poll for progress every 500ms
+    const pollProgress = async () => {
+      try {
+        const response = await fetch(`/api/studies/${params.id}/progress`);
+        if (response.ok) {
+          const data = await response.json();
+          
+          setCurrentRow(data.currentRow);
+          setTotalRows(data.totalRows);
+          setProgress(data.progressPercent);
+          
+          // If study completed, stop polling and load final results
+          if (data.status === 'completed') {
+            if (pollingIntervalRef.current) {
+              clearInterval(pollingIntervalRef.current);
+            }
+            setIsStreaming(false);
+            fetchResults();
+          } else if (data.status === 'failed') {
+            if (pollingIntervalRef.current) {
+              clearInterval(pollingIntervalRef.current);
+            }
+            setIsStreaming(false);
+            setLoading(false);
+          }
         }
-      } else if (data.type === 'complete') {
-        clearTimeout(timeoutId);
-        // Study completed, close stream
-        eventSource.close();
-        setIsStreaming(false);
-        // Don't fetch results again - we already have them from streaming
+      } catch (error) {
+        console.error('Failed to poll progress:', error);
       }
     };
-
-    eventSource.onerror = () => {
-      clearTimeout(timeoutId);
-      eventSource.close();
-      setIsStreaming(false);
-      fetchResults(); // Fallback to regular fetch
-    };
+    
+    // Poll immediately and then every 500ms
+    pollProgress();
+    pollingIntervalRef.current = setInterval(pollProgress, 500);
   };
 
   const fetchResults = async () => {
