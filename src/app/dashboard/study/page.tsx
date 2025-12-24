@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import '@/app/globals.css';
 import { ChevronDown, ChevronUp, Loader2, Trash2 } from 'lucide-react';
 import { Play, Download } from 'lucide-react';
@@ -30,10 +31,12 @@ interface StudyConfig {
 }
 
 export default function StudyPage() {
+  const pathname = usePathname();
   const [datasets, setDatasets] = useState<any[]>([]);
   const [classifiers, setClassifiers] = useState<any[]>([]);
   const [constraints, setConstraints] = useState<any[]>([]);
   const [studies, setStudies] = useState<any[]>([]);
+  const [configLoaded, setConfigLoaded] = useState(false);
   
   const [selectedDataset, setSelectedDataset] = useState('');
   const [selectedClassifiers, setSelectedClassifiers] = useState<string[]>([]);
@@ -48,26 +51,33 @@ export default function StudyPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [studyToDelete, setStudyToDelete] = useState<string | null>(null);
 
-  // Load config from localStorage on mount
+  // Load config when navigating to this page
   useEffect(() => {
-    const savedConfig = localStorage.getItem(STORAGE_KEY);
-    if (savedConfig) {
-      try {
-        const config: StudyConfig = JSON.parse(savedConfig);
-        setSelectedDataset(config.selectedDataset || '');
-        setSelectedClassifiers(config.selectedClassifiers || []);
-        setSelectedConstraints(config.selectedConstraints || []);
-        setSelectedModel(config.selectedModel || 'gpt-4o');
-        setTemperature(config.temperature ?? 0.0);
-        setSampleSize(config.sampleSize || 100);
-      } catch (error) {
-        console.error('Failed to load saved config:', error);
+    const loadConfig = () => {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        try {
+          const config: StudyConfig = JSON.parse(saved);
+          setSelectedDataset(config.selectedDataset || '');
+          setSelectedClassifiers(config.selectedClassifiers || []);
+          setSelectedConstraints(config.selectedConstraints || []);
+          setSelectedModel(config.selectedModel || 'gpt-4o');
+          setTemperature(config.temperature ?? 0.0);
+          setSampleSize(config.sampleSize || 100);
+        } catch (error) {
+          console.error('Failed to load config:', error);
+        }
       }
-    }
-  }, []);
+      setConfigLoaded(true);
+    };
+    
+    loadConfig();
+  }, [pathname]); // Reload when pathname changes
 
-  // Save config to localStorage whenever it changes
+  // Save config to localStorage whenever it changes (only after initial load)
   useEffect(() => {
+    if (!configLoaded) return; // Don't save during initial load
+    
     const config: StudyConfig = {
       selectedDataset,
       selectedClassifiers,
@@ -77,7 +87,7 @@ export default function StudyPage() {
       sampleSize,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
-  }, [selectedDataset, selectedClassifiers, selectedConstraints, selectedModel, temperature, sampleSize]);
+  }, [configLoaded, selectedDataset, selectedClassifiers, selectedConstraints, selectedModel, temperature, sampleSize]);
 
   useEffect(() => {
     fetchData();
@@ -108,10 +118,8 @@ export default function StudyPage() {
     const dataset = datasets.find(d => d.id === selectedDataset);
     if (dataset) {
       setMaxRows(dataset.rowCount);
-      // Only update sample size if it's not already set or if it exceeds the new max
-      if (sampleSize === 0 || sampleSize > dataset.rowCount) {
-        setSampleSize(Math.min(100, dataset.rowCount));
-      }
+      // Always set sample size to max when dataset changes
+      setSampleSize(dataset.rowCount);
     }
   }, [selectedDataset, datasets]);
 
@@ -327,15 +335,13 @@ export default function StudyPage() {
 
             <div className="grid gap-2">
               <Label>Sample Size: {sampleSize} rows (max: {maxRows})</Label>
-              <input
-                type="range"
-                value={sampleSize}
-                onChange={(e) => setSampleSize(Math.min(Number(e.target.value), maxRows))}
-                min={1}
+              <Slider
+                value={[sampleSize]}
+                onValueChange={(v) => setSampleSize(v[0])}
                 max={maxRows}
+                min={1}
                 step={1}
                 disabled={!selectedDataset}
-                className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer slider"
               />
               <p className="text-xs text-muted-foreground">
                 Test your classifier on a subset of your data
@@ -370,11 +376,9 @@ export default function StudyPage() {
                 {studies.map((study) => (
                   <div 
                     key={study.id} 
-                    className={`p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors ${
-                      study.id === newStudyId ? 'animate-flash' : ''
-                    }`}
+                    className="p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
                     onClick={() => {
-                      if (study.status === 'completed') {
+                      if (study.status === 'completed' || study.status === 'running' || study.status === 'pending') {
                         window.location.href = `/dashboard/studies/${study.id}/results`;
                       }
                     }}

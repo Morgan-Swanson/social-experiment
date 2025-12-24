@@ -17,7 +17,11 @@ export async function GET(
     const study = await prisma.study.findUnique({
       where: { id: params.id },
       include: {
-        results: true,
+        results: {
+          orderBy: {
+            rowId: 'asc',
+          },
+        },
         classifiers: {
           include: {
             classifier: true,
