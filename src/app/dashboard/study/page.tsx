@@ -44,6 +44,7 @@ export default function StudyPage() {
   const [maxRows, setMaxRows] = useState(100);
   const [expandedErrors, setExpandedErrors] = useState<Set<string>>(new Set());
   const [newStudyId, setNewStudyId] = useState<string | null>(null);
+  const [isConfigFlashing, setIsConfigFlashing] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [studyToDelete, setStudyToDelete] = useState<string | null>(null);
 
@@ -107,7 +108,10 @@ export default function StudyPage() {
     const dataset = datasets.find(d => d.id === selectedDataset);
     if (dataset) {
       setMaxRows(dataset.rowCount);
-      setSampleSize(Math.min(100, dataset.rowCount));
+      // Only update sample size if it's not already set or if it exceeds the new max
+      if (sampleSize === 0 || sampleSize > dataset.rowCount) {
+        setSampleSize(Math.min(100, dataset.rowCount));
+      }
     }
   }, [selectedDataset, datasets]);
 
@@ -124,6 +128,10 @@ export default function StudyPage() {
   };
 
   const handleRunStudy = async () => {
+    // Flash the configuration card
+    setIsConfigFlashing(true);
+    setTimeout(() => setIsConfigFlashing(false), 500);
+
     const response = await fetch('/api/studies', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -218,7 +226,7 @@ export default function StudyPage() {
       </div>
 
       <div className="grid gap-6">
-        <Card>
+        <Card className={isConfigFlashing ? 'animate-flash' : ''}>
           <CardHeader>
             <CardTitle>New Study</CardTitle>
             <CardDescription>
