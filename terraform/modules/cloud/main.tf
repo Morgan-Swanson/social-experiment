@@ -421,9 +421,8 @@ resource "aws_amplify_app" "main" {
           - .next/cache/**/*
     EOT
 
-  # Environment variables
+  # Environment variables (add NEXTAUTH_URL, DATABASE_URL, and NEXTAUTH_SECRET manually in console)
   environment_variables = {
-    NEXTAUTH_URL          = "https://main.${aws_amplify_app.main.default_domain}"
     AWS_REGION            = var.aws_region
     AWS_S3_BUCKET         = aws_s3_bucket.storage.id
     AWS_S3_REGION         = var.aws_region
@@ -511,6 +510,7 @@ output "deployment_instructions" {
        - Branch: ${var.github_branch}
     
     2. Add Amplify environment variables in AWS Console:
+       - NEXTAUTH_URL: https://main.${aws_amplify_app.main.default_domain}
        - DATABASE_URL: (retrieve from Secrets Manager: ${aws_secretsmanager_secret.database_url.name})
        - NEXTAUTH_SECRET: (retrieve from Secrets Manager: ${aws_secretsmanager_secret.nextauth_secret.name})
        
