@@ -242,10 +242,17 @@ jobs:
         run: |
           echo "Clearing Terraform state..."
           TF_STATE_BUCKET="${PROJECT_NAME}-terraform-state"
+          TF_LOCK_TABLE="${PROJECT_NAME}-terraform-locks"
           
           if aws s3api head-bucket --bucket "$TF_STATE_BUCKET" 2>/dev/null; then
             echo "Deleting Terraform state files..."
             aws s3 rm "s3://$TF_STATE_BUCKET/terraform.tfstate" || true
+            
+            # Clear DynamoDB digest entries that may be stale
+            STATE_KEY="${TF_STATE_BUCKET}/terraform.tfstate"
+            echo "Clearing DynamoDB digest entries..."
+            aws dynamodb delete-item --table-name "$TF_LOCK_TABLE" --key "{\"LockID\": {\"S\": \"$STATE_KEY-md5\"}}" 2>/dev/null || true
+            
             # Keep the bucket and DynamoDB table for future deployments
           fi
       
