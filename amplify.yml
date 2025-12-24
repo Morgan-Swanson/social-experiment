@@ -4,11 +4,7 @@ frontend:
     preBuild:
       commands:
         - npm ci --cache .npm --prefer-offline
-        # Write environment variables to .env.production for Next.js SSR runtime
-        # Use Node.js to properly handle special characters
-        - node -e "const fs=require('fs'); fs.writeFileSync('.env.production', process.env.DATABASE_URL ? 'DATABASE_URL=' + process.env.DATABASE_URL + '\n' : '', {flag:'a'})"
-        - node -e "const fs=require('fs'); fs.writeFileSync('.env.production', process.env.NEXTAUTH_SECRET ? 'NEXTAUTH_SECRET=' + process.env.NEXTAUTH_SECRET + '\n' : '', {flag:'a'})"
-        - node -e "const fs=require('fs'); fs.writeFileSync('.env.production', process.env.NEXTAUTH_URL ? 'NEXTAUTH_URL=' + process.env.NEXTAUTH_URL + '\n' : '', {flag:'a'})"
+        - node scripts/write-env.js
     build:
       commands:
         - npm run build
