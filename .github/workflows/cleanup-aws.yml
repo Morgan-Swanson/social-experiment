@@ -248,11 +248,27 @@ jobs:
             echo "Deleting Terraform state files..."
             aws s3 rm "s3://$TF_STATE_BUCKET/terraform.tfstate" || true
             
-            # Clear DynamoDB digest entries that may be stale
+            # Clear all DynamoDB entries related to this state file
             STATE_KEY="${TF_STATE_BUCKET}/terraform.tfstate"
-            echo "Clearing DynamoDB digest entries..."
+            
+            echo "Clearing all DynamoDB lock and digest entries..."
+            # Clear digest entry
             aws dynamodb delete-item --table-name "$TF_LOCK_TABLE" --key "{\"LockID\": {\"S\": \"$STATE_KEY-md5\"}}" 2>/dev/null || true
             
+            # Clear lock entry (uses the state key as LockID)
+            aws dynamodb delete-item --table-name "$TF_LOCK_TABLE" --key "{\"LockID\": {\"S\": \"$STATE_KEY\"}}" 2>/dev/null || true
+            
+            # Scan and delete any other entries (belt and suspenders)
+            echo "Scanning for any remaining lock entries..."
+            LOCK_ITEMS=$(aws dynamodb scan --table-name "$TF_LOCK_TABLE" --query 'Items[].LockID.S' --output text 2>/dev/null || echo "")
+            for LOCK_ID in $LOCK_ITEMS; do
+              if [ -n "$LOCK_ID" ]; then
+                echo "Deleting lock entry: $LOCK_ID"
+                aws dynamodb delete-item --table-name "$TF_LOCK_TABLE" --key "{\"LockID\": {\"S\": \"$LOCK_ID\"}}" 2>/dev/null || true
+              fi
+            done
+            
+            echo "All Terraform state and locks cleared"
             # Keep the bucket and DynamoDB table for future deployments
           fi
       
