@@ -19,7 +19,7 @@ export async function GET(
             classifications: true,
           },
           orderBy: {
-            createdAt: 'asc',
+            rowId: 'asc',
           },
         },
       },
