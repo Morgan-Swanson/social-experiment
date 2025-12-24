@@ -33,8 +33,54 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
   }
+}
+
+@layer utilities {
+  @keyframes flash {
+    0%, 100% {
+      background-color: transparent;
+    }
+    50% {
+      background-color: rgb(229 231 235);
+    }
+  }
+
+  .animate-flash {
+    animation: flash 500ms ease-in-out;
+  }
+}
+
+/* Custom range slider styling */
+input[type="range"].slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: hsl(var(--muted));
+  outline: none;
+}
+
+input[type="range"].slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  background: hsl(var(--primary));
+  cursor: pointer;
+  border-radius: 50%;
+}
+
+input[type="range"].slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  background: hsl(var(--primary));
+  cursor: pointer;
+  border-radius: 50%;
+  border: none;
+}
+
+input[type="range"].slider:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Custom scrollbar for dark theme */

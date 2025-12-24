@@ -18,6 +18,11 @@ export async function GET() {
           classifier: true,
         },
       },
+      constraints: {
+        include: {
+          constraint: true,
+        },
+      },
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -33,7 +38,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { datasetId, classifierIds, constraintId, modelProvider, modelName, temperature, sampleSize } = body;
+    const { datasetId, classifierIds, constraintIds, modelProvider, modelName, temperature, sampleSize } = body;
 
     if (!datasetId || !classifierIds || classifierIds.length === 0) {
       return NextResponse.json(
@@ -48,7 +53,6 @@ export async function POST(request: NextRequest) {
         userId: session.user.id,
         name: `Study ${new Date().toISOString()}`,
         datasetId,
-        modelConstraintId: constraintId,
         modelProvider,
         modelName,
         temperature: temperature ?? 0.0,
@@ -64,6 +68,16 @@ export async function POST(request: NextRequest) {
         classifierId,
       })),
     });
+
+    // Link constraints
+    if (constraintIds && constraintIds.length > 0) {
+      await prisma.studyConstraint.createMany({
+        data: constraintIds.map((constraintId: string) => ({
+          studyId: study.id,
+          constraintId,
+        })),
+      });
+    }
 
     // Trigger async processing (in real implementation, use a queue)
     fetch(`${process.env.NEXTAUTH_URL}/api/studies/${study.id}/process`, {

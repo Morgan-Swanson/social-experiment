@@ -1,13 +1,33 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import '@/app/globals.css';
+import { ChevronDown, ChevronUp, Loader2, Trash2 } from 'lucide-react';
 import { Play, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+
+const STORAGE_KEY = 'study-config';
+
+interface StudyConfig {
+  selectedDataset: string;
+  selectedClassifiers: string[];
+  selectedConstraints: string[];
+  selectedModel: string;
+  temperature: number;
+  sampleSize: number;
+}
 
 export default function StudyPage() {
   const [datasets, setDatasets] = useState<any[]>([]);
@@ -17,12 +37,47 @@ export default function StudyPage() {
   
   const [selectedDataset, setSelectedDataset] = useState('');
   const [selectedClassifiers, setSelectedClassifiers] = useState<string[]>([]);
-  const [selectedConstraint, setSelectedConstraint] = useState('');
+  const [selectedConstraints, setSelectedConstraints] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState('gpt-4o');
   const [temperature, setTemperature] = useState(0.0);
   const [sampleSize, setSampleSize] = useState(100);
   const [maxRows, setMaxRows] = useState(100);
   const [expandedErrors, setExpandedErrors] = useState<Set<string>>(new Set());
+  const [newStudyId, setNewStudyId] = useState<string | null>(null);
+  const [isConfigFlashing, setIsConfigFlashing] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [studyToDelete, setStudyToDelete] = useState<string | null>(null);
+
+  // Load config from localStorage on mount
+  useEffect(() => {
+    const savedConfig = localStorage.getItem(STORAGE_KEY);
+    if (savedConfig) {
+      try {
+        const config: StudyConfig = JSON.parse(savedConfig);
+        setSelectedDataset(config.selectedDataset || '');
+        setSelectedClassifiers(config.selectedClassifiers || []);
+        setSelectedConstraints(config.selectedConstraints || []);
+        setSelectedModel(config.selectedModel || 'gpt-4o');
+        setTemperature(config.temperature ?? 0.0);
+        setSampleSize(config.sampleSize || 100);
+      } catch (error) {
+        console.error('Failed to load saved config:', error);
+      }
+    }
+  }, []);
+
+  // Save config to localStorage whenever it changes
+  useEffect(() => {
+    const config: StudyConfig = {
+      selectedDataset,
+      selectedClassifiers,
+      selectedConstraints,
+      selectedModel,
+      temperature,
+      sampleSize,
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+  }, [selectedDataset, selectedClassifiers, selectedConstraints, selectedModel, temperature, sampleSize]);
 
   useEffect(() => {
     fetchData();
@@ -53,7 +108,10 @@ export default function StudyPage() {
     const dataset = datasets.find(d => d.id === selectedDataset);
     if (dataset) {
       setMaxRows(dataset.rowCount);
-      setSampleSize(Math.min(100, dataset.rowCount));
+      // Only update sample size if it's not already set or if it exceeds the new max
+      if (sampleSize === 0 || sampleSize > dataset.rowCount) {
+        setSampleSize(Math.min(100, dataset.rowCount));
+      }
     }
   }, [selectedDataset, datasets]);
 
@@ -63,14 +121,24 @@ export default function StudyPage() {
     );
   };
 
+  const handleConstraintToggle = (id: string) => {
+    setSelectedConstraints(prev =>
+      prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]
+    );
+  };
+
   const handleRunStudy = async () => {
+    // Flash the configuration card
+    setIsConfigFlashing(true);
+    setTimeout(() => setIsConfigFlashing(false), 500);
+
     const response = await fetch('/api/studies', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         datasetId: selectedDataset,
         classifierIds: selectedClassifiers,
-        constraintId: selectedConstraint || null,
+        constraintIds: selectedConstraints,
         modelProvider: 'openai',
         modelName: selectedModel,
         temperature,
@@ -79,8 +147,35 @@ export default function StudyPage() {
     });
 
     if (response.ok) {
+      const newStudy = await response.json();
+      setNewStudyId(newStudy.id);
+      setTimeout(() => setNewStudyId(null), 500);
       fetchData();
+      // Configuration is retained - no reset
     }
+  };
+
+  const handleDeleteStudy = async () => {
+    if (!studyToDelete) return;
+
+    try {
+      const response = await fetch(`/api/studies/${studyToDelete}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        fetchData();
+        setDeleteDialogOpen(false);
+        setStudyToDelete(null);
+      }
+    } catch (error) {
+      console.error('Failed to delete study:', error);
+    }
+  };
+
+  const openDeleteDialog = (studyId: string) => {
+    setStudyToDelete(studyId);
+    setDeleteDialogOpen(true);
   };
 
   const handleDownloadResults = async (studyId: string) => {
@@ -131,7 +226,7 @@ export default function StudyPage() {
       </div>
 
       <div className="grid gap-6">
-        <Card>
+        <Card className={isConfigFlashing ? 'animate-flash' : ''}>
           <CardHeader>
             <CardTitle>New Study</CardTitle>
             <CardDescription>
@@ -160,15 +255,15 @@ export default function StudyPage() {
               {classifiers.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No classifiers available</p>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {classifiers.map((classifier) => (
-                    <div key={classifier.id} className="flex items-center space-x-2">
-                      <Checkbox
+                    <div key={classifier.id} className="flex items-center gap-3">
+                      <Switch
                         id={classifier.id}
                         checked={selectedClassifiers.includes(classifier.id)}
                         onCheckedChange={() => handleClassifierToggle(classifier.id)}
                       />
-                      <label htmlFor={classifier.id} className="text-sm cursor-pointer">
+                      <label htmlFor={classifier.id} className="text-sm cursor-pointer flex-1">
                         {classifier.name}
                       </label>
                     </div>
@@ -178,19 +273,25 @@ export default function StudyPage() {
             </div>
 
             <div className="grid gap-2">
-              <Label>Constraint (Optional)</Label>
-              <select
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
-                value={selectedConstraint}
-                onChange={(e) => setSelectedConstraint(e.target.value)}
-              >
-                <option value="">No constraint</option>
-                {constraints.map((constraint) => (
-                  <option key={constraint.id} value={constraint.id}>
-                    {constraint.name}
-                  </option>
-                ))}
-              </select>
+              <Label>Select Constraints (optional)</Label>
+              {constraints.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No constraints available</p>
+              ) : (
+                <div className="space-y-3">
+                  {constraints.map((constraint) => (
+                    <div key={constraint.id} className="flex items-center gap-3">
+                      <Switch
+                        id={constraint.id}
+                        checked={selectedConstraints.includes(constraint.id)}
+                        onCheckedChange={() => handleConstraintToggle(constraint.id)}
+                      />
+                      <label htmlFor={constraint.id} className="text-sm cursor-pointer flex-1">
+                        {constraint.name}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="grid gap-2">
@@ -225,14 +326,16 @@ export default function StudyPage() {
             </div>
 
             <div className="grid gap-2">
-              <Label>Sample Size: {sampleSize} rows</Label>
-              <Slider
-                value={[sampleSize]}
-                onValueChange={(v) => setSampleSize(v[0])}
-                max={maxRows}
+              <Label>Sample Size: {sampleSize} rows (max: {maxRows})</Label>
+              <input
+                type="range"
+                value={sampleSize}
+                onChange={(e) => setSampleSize(Math.min(Number(e.target.value), maxRows))}
                 min={1}
+                max={maxRows}
                 step={1}
                 disabled={!selectedDataset}
+                className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer slider"
               />
               <p className="text-xs text-muted-foreground">
                 Test your classifier on a subset of your data
@@ -267,7 +370,9 @@ export default function StudyPage() {
                 {studies.map((study) => (
                   <div 
                     key={study.id} 
-                    className="p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
+                    className={`p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors ${
+                      study.id === newStudyId ? 'animate-flash' : ''
+                    }`}
                     onClick={() => {
                       if (study.status === 'completed') {
                         window.location.href = `/dashboard/studies/${study.id}/results`;
@@ -335,6 +440,14 @@ export default function StudyPage() {
                             Re-run
                           </Button>
                         )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openDeleteDialog(study.id)}
+                          className="text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -344,6 +457,32 @@ export default function StudyPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Study</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this study? This action cannot be undone.
+              All results and data associated with this study will be permanently deleted.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteStudy}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
