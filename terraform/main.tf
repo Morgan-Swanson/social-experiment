@@ -42,6 +42,24 @@ variable "project_name" {
   default     = "social-experiment"
 }
 
+variable "github_repo" {
+  description = "GitHub repository for Amplify deployment"
+  type        = string
+  default     = "Morgan-Swanson/social-experiment"
+}
+
+variable "github_branch" {
+  description = "GitHub branch to deploy"
+  type        = string
+  default     = "main"
+}
+
+variable "nextauth_secret" {
+  description = "NextAuth secret for session encryption"
+  type        = string
+  sensitive   = true
+}
+
 # Local environment (using Docker Compose - this is more for documentation)
 module "local" {
   source = "./modules/local"
@@ -55,8 +73,11 @@ module "cloud" {
   source = "./modules/cloud"
   count  = var.environment == "cloud" ? 1 : 0
   
-  project_name = var.project_name
-  aws_region   = var.aws_region
+  project_name     = var.project_name
+  aws_region       = var.aws_region
+  github_repo      = var.github_repo
+  github_branch    = var.github_branch
+  nextauth_secret  = var.nextauth_secret
 }
 
 output "environment" {
