@@ -4,6 +4,7 @@
 [![codecov](https://codecov.io/gh/Morgan-Swanson/social-experiment/branch/main/graph/badge.svg)](https://codecov.io/gh/Morgan-Swanson/social-experiment)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Version](https://img.shields.io/badge/version-0.1.0-green.svg)](https://github.com/Morgan-Swanson/social-experiment/releases)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow.svg)](https://www.buymeacoffee.com/morganswanson)
 
 An open-source platform for running AI-powered classification studies on social media data. Built with Next.js, TypeScript, and OpenAI.
 
@@ -209,12 +210,6 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 - **Documentation**: [docs/](docs/)
 - **Issue Tracker**: [GitHub Issues](https://github.com/Morgan-Swanson/social-experiment/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/Morgan-Swanson/social-experiment/discussions)
-
-## Donate
-
-If you find this project useful, consider supporting its development:
-
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow.svg)](https://www.buymeacoffee.com/morganswanson)
 
 ## License
 

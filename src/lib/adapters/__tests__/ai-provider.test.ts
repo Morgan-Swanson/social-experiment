@@ -32,6 +32,125 @@ describe('AI Provider', () => {
     mockCreate = instance.chat.completions.create;
   });
 
+  describe('classify', () => {
+    it('should parse valid score and reasoning response', async () => {
+      const mockResponse = {
+        choices: [{
+          message: {
+            content: 'Score: 0.85\nReasoning: This text has a positive sentiment.',
+          },
+        }],
+      };
+
+      mockCreate.mockResolvedValue(mockResponse);
+
+      const provider = createAIProvider(mockConfig);
+      const result = await provider.classify('Test text', 'Classify sentiment');
+
+      expect(result.score).toBe(0.85);
+      expect(result.reasoning).toBe('This text has a positive sentiment.');
+      expect(result.rawResponse).toBe('Score: 0.85\nReasoning: This text has a positive sentiment.');
+    });
+
+    it('should handle response without score', async () => {
+      const mockResponse = {
+        choices: [{
+          message: {
+            content: 'This is positive text.',
+          },
+        }],
+      };
+
+      mockCreate.mockResolvedValue(mockResponse);
+
+      const provider = createAIProvider(mockConfig);
+      const result = await provider.classify('Test text', 'Classify sentiment');
+
+      expect(result.score).toBe(0);
+      expect(result.reasoning).toBeUndefined();
+    });
+
+    it('should handle response without reasoning', async () => {
+      const mockResponse = {
+        choices: [{
+          message: {
+            content: 'Score: 0.9',
+          },
+        }],
+      };
+
+      mockCreate.mockResolvedValue(mockResponse);
+
+      const provider = createAIProvider(mockConfig);
+      const result = await provider.classify('Test text', 'Classify sentiment');
+
+      expect(result.score).toBe(0.9);
+      expect(result.reasoning).toBeUndefined();
+    });
+
+    it('should handle empty response', async () => {
+      const mockResponse = {
+        choices: [{
+          message: {
+            content: '',
+          },
+        }],
+      };
+
+      mockCreate.mockResolvedValue(mockResponse);
+
+      const provider = createAIProvider(mockConfig);
+      const result = await provider.classify('Test text', 'Classify sentiment');
+
+      expect(result.score).toBe(0);
+      expect(result.rawResponse).toBe('');
+    });
+
+    it('should handle null message content', async () => {
+      const mockResponse = {
+        choices: [{
+          message: {
+            content: null,
+          },
+        }],
+      };
+
+      mockCreate.mockResolvedValue(mockResponse);
+
+      const provider = createAIProvider(mockConfig);
+      const result = await provider.classify('Test text', 'Classify sentiment');
+
+      expect(result.score).toBe(0);
+      expect(result.rawResponse).toBe('');
+    });
+
+    it('should pass constraints to system message', async () => {
+      const mockResponse = {
+        choices: [{
+          message: {
+            content: 'Score: 0.5\nReasoning: Neutral.',
+          },
+        }],
+      };
+
+      mockCreate.mockResolvedValue(mockResponse);
+
+      const provider = createAIProvider(mockConfig);
+      await provider.classify('Test text', 'Classify sentiment', 'Be conservative in scoring');
+
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: expect.arrayContaining([
+            expect.objectContaining({
+              role: 'system',
+              content: expect.stringContaining('Be conservative in scoring'),
+            }),
+          ]),
+        })
+      );
+    });
+  });
+
   describe('batchClassify', () => {
     it('should parse valid JSON responses correctly', async () => {
       const mockResponse = {
@@ -108,6 +227,122 @@ describe('AI Provider', () => {
 
       expect(results['classifier-1'].score).toBe(0);
       expect(results['classifier-1'].reasoning).toContain('Failed to parse');
+    });
+
+    it('should handle string confidence values', async () => {
+      const mockResponse = {
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              'classifier-1': { classification: 'positive', confidence: '0.75' },
+            }),
+          },
+        }],
+      };
+
+      mockCreate.mockResolvedValue(mockResponse);
+
+      const provider = createAIProvider(mockConfig);
+      const results = await provider.batchClassify(
+        'Test text',
+        [{ id: 'classifier-1', prompt: 'Classify sentiment' }]
+      );
+
+      expect(results['classifier-1'].score).toBe(0.75);
+    });
+
+    it('should handle invalid confidence values', async () => {
+      const mockResponse = {
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              'classifier-1': { classification: 'positive', confidence: 'not-a-number' },
+            }),
+          },
+        }],
+      };
+
+      mockCreate.mockResolvedValue(mockResponse);
+
+      const provider = createAIProvider(mockConfig);
+      const results = await provider.batchClassify(
+        'Test text',
+        [{ id: 'classifier-1', prompt: 'Classify sentiment' }]
+      );
+
+      expect(results['classifier-1'].score).toBe(0);
+    });
+
+    it('should pass constraints to system message in batch', async () => {
+      const mockResponse = {
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              'classifier-1': { classification: 'neutral', confidence: 0.5 },
+            }),
+          },
+        }],
+      };
+
+      mockCreate.mockResolvedValue(mockResponse);
+
+      const provider = createAIProvider(mockConfig);
+      await provider.batchClassify(
+        'Test text',
+        [{ id: 'classifier-1', prompt: 'Classify sentiment' }],
+        'Always be neutral'
+      );
+
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: expect.arrayContaining([
+            expect.objectContaining({
+              role: 'system',
+              content: expect.stringContaining('Always be neutral'),
+            }),
+          ]),
+        })
+      );
+    });
+
+    it('should handle empty choices array', async () => {
+      const mockResponse = {
+        choices: [],
+      };
+
+      mockCreate.mockResolvedValue(mockResponse);
+
+      const provider = createAIProvider(mockConfig);
+      const results = await provider.batchClassify(
+        'Test text',
+        [{ id: 'classifier-1', prompt: 'Test' }]
+      );
+
+      expect(results['classifier-1'].score).toBe(0);
+      expect(results['classifier-1'].reasoning).toContain('Failed to parse');
+    });
+
+    it('should handle non-object classifier result', async () => {
+      const mockResponse = {
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              'classifier-1': 'just a string',
+            }),
+          },
+        }],
+      };
+
+      mockCreate.mockResolvedValue(mockResponse);
+
+      const provider = createAIProvider(mockConfig);
+      const results = await provider.batchClassify(
+        'Test text',
+        [{ id: 'classifier-1', prompt: 'Classify sentiment' }]
+      );
+
+      expect(results['classifier-1'].score).toBe(0);
+      expect(results['classifier-1'].reasoning).toBe('Missing classification in response');
     });
   });
 });

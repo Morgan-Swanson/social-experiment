@@ -152,8 +152,11 @@ class OpenAIProvider implements AIProvider {
         }
       });
     } catch (error) {
-      console.error('Failed to parse batch classification JSON:', error);
-      console.error('Raw content:', content);
+      // Avoid noisy logs during tests where invalid JSON is intentionally provided
+      if (process.env.NODE_ENV !== 'test') {
+        console.error('Failed to parse batch classification JSON:', error);
+        console.error('Raw content:', content);
+      }
       
       // Fallback: try to parse even if JSON parsing fails
       prompts.forEach(({ id }) => {

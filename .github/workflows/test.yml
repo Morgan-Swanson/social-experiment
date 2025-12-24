@@ -9,6 +9,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      NEXT_DISABLE_ESLINT_PROMPT: 1
 
     strategy:
       matrix:
