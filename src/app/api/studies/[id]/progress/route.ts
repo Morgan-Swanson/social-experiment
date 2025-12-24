@@ -35,11 +35,3 @@ export async function GET(
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
-      totalRows: study.totalRows,
-      progressPercent: study.progressPercent,
-    });
-  } catch (error) {
-    console.error('Progress fetch error:', error);
-    return NextResponse.json({ error: 'Failed to fetch progress' }, { status: 500 });
-  }
-}
