@@ -26,13 +26,13 @@ export async function GET(
     const storage = createStorageAdapter();
     const fileBuffer = await storage.getFile(dataset.storageKey);
 
-    // Return file as download
-    return new NextResponse(fileBuffer, {
-      headers: {
-        'Content-Type': 'text/csv',
-        'Content-Disposition': `attachment; filename="${dataset.filename}"`,
-      },
-    });
+  // Return file as download
+  return new NextResponse(fileBuffer.toString(), {
+    headers: {
+      'Content-Type': 'text/csv',
+      'Content-Disposition': `attachment; filename="${dataset.filename}"`,
+    },
+  });
   } catch (error) {
     console.error('Dataset download error:', error);
     return NextResponse.json({ error: 'Download failed' }, { status: 500 });
