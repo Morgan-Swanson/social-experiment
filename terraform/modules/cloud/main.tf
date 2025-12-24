@@ -339,111 +339,9 @@ resource "aws_cloudwatch_metric_alarm" "db_storage" {
   }
 }
 
-# IAM role for Amplify
-resource "aws_iam_role" "amplify" {
-  name = "${var.project_name}-amplify-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "amplify.amazonaws.com"
-        }
-      }
-    ]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "amplify_backend" {
-  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess-Amplify"
-  role       = aws_iam_role.amplify.name
-}
-
-resource "aws_iam_role_policy" "amplify_secrets" {
-  name = "${var.project_name}-amplify-secrets"
-  role = aws_iam_role.amplify.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "secretsmanager:GetSecretValue"
-        ]
-        Resource = [
-          aws_secretsmanager_secret.database_url.arn,
-          aws_secretsmanager_secret.nextauth_secret.arn
-        ]
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:GetObject",
-          "s3:PutObject",
-          "s3:DeleteObject",
-          "s3:ListBucket"
-        ]
-        Resource = [
-          aws_s3_bucket.storage.arn,
-          "${aws_s3_bucket.storage.arn}/*"
-        ]
-      }
-    ]
-  })
-}
-
-# AWS Amplify App
-# Note: GitHub connection must be done manually in AWS Console after creation
-# Terraform cannot connect to GitHub without an OAuth token
-resource "aws_amplify_app" "main" {
-  name = var.project_name
-
-  # Build settings for Next.js
-  build_spec = <<-EOT
-    version: 1
-    frontend:
-      phases:
-        preBuild:
-          commands:
-            - npm ci
-        build:
-          commands:
-            - npm run build
-      artifacts:
-        baseDirectory: .next
-        files:
-          - '**/*'
-      cache:
-        paths:
-          - node_modules/**/*
-          - .next/cache/**/*
-    EOT
-
-  # Environment variables (add NEXTAUTH_URL, DATABASE_URL, and NEXTAUTH_SECRET manually in console)
-  environment_variables = {
-    NEXT_PUBLIC_AWS_REGION    = var.aws_region
-    NEXT_PUBLIC_S3_BUCKET     = aws_s3_bucket.storage.id
-    NEXT_PUBLIC_S3_REGION     = var.aws_region
-  }
-
-  # Custom rules for Next.js routing
-  custom_rule {
-    source = "/<*>"
-    status = "404"
-    target = "/index.html"
-  }
-
-  iam_service_role_arn = aws_iam_role.amplify.arn
-
-  tags = {
-    Name        = var.project_name
-    Environment = "beta"
-  }
-}
+# Note: Amplify hosting is managed manually outside of Terraform
+# The Gen 2 app (WEB_COMPUTE platform) is created and configured in AWS Console
+# This allows for proper Next.js SSR support and simpler GitHub OAuth integration
 
 # Data sources
 data "aws_caller_identity" "current" {}
@@ -467,50 +365,27 @@ output "storage_bucket" {
   value = aws_s3_bucket.storage.id
 }
 
-output "amplify_app_id" {
-  value       = aws_amplify_app.main.id
-  description = "Amplify App ID"
-}
-
-output "amplify_default_domain" {
-  value       = "https://${aws_amplify_app.main.default_domain}"
-  description = "Amplify default domain URL (connect GitHub to get branch URL)"
-}
-
-output "vpc_id" {
-  value = aws_vpc.main.id
-}
-
-output "db_instance_endpoint" {
-  value = aws_db_instance.postgres.endpoint
-}
-
 output "deployment_instructions" {
   value = <<-EOT
     
     AWS Infrastructure Deployed Successfully!
     
-    Next Steps:
-    1. Connect GitHub to Amplify (one-time manual step in AWS Console):
-       - Go to: https://console.aws.amazon.com/amplify/home?region=${var.aws_region}#/${aws_amplify_app.main.id}
-       - Click "Host web app" > "GitHub"
-       - Authorize AWS Amplify to access your GitHub account
-       - Select repository: ${var.github_repo}
-       - Select branch: ${var.github_branch}
-       - Use existing build settings (already configured)
+    Infrastructure managed:
+    - VPC and networking
+    - RDS PostgreSQL database
+    - S3 bucket for file storage
+    - Secrets Manager (DATABASE_URL, NEXTAUTH_SECRET)
+    - CloudWatch logging and monitoring
     
-    2. Add Amplify environment variables in AWS Console (Hosting > Environment variables):
-       - DATABASE_URL: (retrieve from Secrets Manager: ${aws_secretsmanager_secret.database_url.name})
-       - NEXTAUTH_SECRET: (retrieve from Secrets Manager: ${aws_secretsmanager_secret.nextauth_secret.name})
-       - NEXTAUTH_URL: (will be the Amplify URL after first deploy)
-       
-       (Users provide their own OpenAI API keys through the application)
+    Secrets stored in AWS Secrets Manager:
+    - ${aws_secretsmanager_secret.database_url.name} (DATABASE_URL)
+    - ${aws_secretsmanager_secret.nextauth_secret.name} (NEXTAUTH_SECRET)
     
-    3. Deploy the application:
-       - Amplify will auto-deploy after GitHub connection
-       - Future pushes to ${var.github_branch} will auto-deploy
+    Note: Amplify hosting is managed separately in AWS Console (Gen 2 app)
     
-    4. After first deploy, update NEXTAUTH_URL with actual Amplify URL
+    Monthly Cost Estimate: $20-30 (excluding OpenAI API usage and Amplify hosting)
+  EOT
+}
     
     Monthly Cost Estimate: $20-30 (excluding OpenAI API usage)
   EOT
