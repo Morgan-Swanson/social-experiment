@@ -1,0 +1,281 @@
+name: Cleanup AWS Resources
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "DELETE" to confirm you want to delete all AWS resources'
+        required: true
+        type: string
+      delete_database:
+        description: 'Also delete RDS database (data will be lost)'
+        required: false
+        type: boolean
+        default: false
+      delete_s3:
+        description: 'Also delete S3 bucket (files will be lost)'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  AWS_REGION: us-east-1
+  PROJECT_NAME: social-experiment
+
+jobs:
+  cleanup:
+    name: Cleanup AWS Resources
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.confirm == 'DELETE' }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      
+      - name: Delete Amplify Apps
+        continue-on-error: true
+        run: |
+          echo "Deleting Amplify apps..."
+          AMPLIFY_APPS=$(aws amplify list-apps --query "apps[?contains(name, '$PROJECT_NAME')].appId" --output text)
+          for APP_ID in $AMPLIFY_APPS; do
+            if [ -n "$APP_ID" ] && [ "$APP_ID" != "None" ]; then
+              echo "Deleting Amplify app: $APP_ID"
+              aws amplify delete-app --app-id "$APP_ID" || true
+            fi
+          done
+      
+      - name: Delete RDS Instances
+        if: ${{ github.event.inputs.delete_database == 'true' }}
+        continue-on-error: true
+        run: |
+          echo "Deleting RDS instances..."
+          RDS_INSTANCES=$(aws rds describe-db-instances --query "DBInstances[?contains(DBInstanceIdentifier, '$PROJECT_NAME')].DBInstanceIdentifier" --output text)
+          for DB_ID in $RDS_INSTANCES; do
+            if [ -n "$DB_ID" ] && [ "$DB_ID" != "None" ]; then
+              echo "Deleting RDS instance: $DB_ID (this takes 5-10 minutes)"
+              aws rds delete-db-instance --db-instance-identifier "$DB_ID" --skip-final-snapshot --delete-automated-backups || true
+            fi
+          done
+          
+          # Wait for RDS deletion
+          for DB_ID in $RDS_INSTANCES; do
+            if [ -n "$DB_ID" ] && [ "$DB_ID" != "None" ]; then
+              echo "Waiting for RDS instance $DB_ID to be deleted..."
+              aws rds wait db-instance-deleted --db-instance-identifier "$DB_ID" 2>/dev/null || true
+            fi
+          done
+      
+      - name: Delete DB Subnet Groups
+        continue-on-error: true
+        run: |
+          echo "Deleting DB subnet groups..."
+          DB_SUBNET_GROUPS=$(aws rds describe-db-subnet-groups --query "DBSubnetGroups[?contains(DBSubnetGroupName, '$PROJECT_NAME')].DBSubnetGroupName" --output text)
+          for SG in $DB_SUBNET_GROUPS; do
+            if [ -n "$SG" ] && [ "$SG" != "None" ]; then
+              echo "Deleting DB subnet group: $SG"
+              aws rds delete-db-subnet-group --db-subnet-group-name "$SG" || true
+            fi
+          done
+      
+      - name: Delete CloudWatch Alarms
+        continue-on-error: true
+        run: |
+          echo "Deleting CloudWatch alarms..."
+          ALARMS=$(aws cloudwatch describe-alarms --query "MetricAlarms[?contains(AlarmName, '$PROJECT_NAME')].AlarmName" --output text)
+          if [ -n "$ALARMS" ] && [ "$ALARMS" != "None" ]; then
+            aws cloudwatch delete-alarms --alarm-names $ALARMS || true
+          fi
+      
+      - name: Delete CloudWatch Log Groups
+        continue-on-error: true
+        run: |
+          echo "Deleting CloudWatch log groups..."
+          LOG_GROUPS=$(aws logs describe-log-groups --query "logGroups[?contains(logGroupName, '$PROJECT_NAME')].logGroupName" --output text)
+          for LG in $LOG_GROUPS; do
+            if [ -n "$LG" ] && [ "$LG" != "None" ]; then
+              echo "Deleting log group: $LG"
+              aws logs delete-log-group --log-group-name "$LG" || true
+            fi
+          done
+      
+      - name: Delete Secrets Manager Secrets
+        continue-on-error: true
+        run: |
+          echo "Deleting Secrets Manager secrets..."
+          SECRETS=$(aws secretsmanager list-secrets --query "SecretList[?contains(Name, '$PROJECT_NAME')].Name" --output text)
+          for SECRET in $SECRETS; do
+            if [ -n "$SECRET" ] && [ "$SECRET" != "None" ]; then
+              echo "Deleting secret: $SECRET"
+              aws secretsmanager delete-secret --secret-id "$SECRET" --force-delete-without-recovery || true
+            fi
+          done
+      
+      - name: Delete IAM Role Policies and Roles
+        continue-on-error: true
+        run: |
+          echo "Deleting IAM roles..."
+          ROLES=$(aws iam list-roles --query "Roles[?contains(RoleName, '$PROJECT_NAME')].RoleName" --output text)
+          for ROLE in $ROLES; do
+            if [ -n "$ROLE" ] && [ "$ROLE" != "None" ]; then
+              echo "Deleting role: $ROLE"
+              
+              # Delete inline policies
+              POLICIES=$(aws iam list-role-policies --role-name "$ROLE" --query 'PolicyNames' --output text)
+              for POLICY in $POLICIES; do
+                aws iam delete-role-policy --role-name "$ROLE" --policy-name "$POLICY" || true
+              done
+              
+              # Detach managed policies
+              ATTACHED=$(aws iam list-attached-role-policies --role-name "$ROLE" --query 'AttachedPolicies[].PolicyArn' --output text)
+              for POLICY_ARN in $ATTACHED; do
+                aws iam detach-role-policy --role-name "$ROLE" --policy-arn "$POLICY_ARN" || true
+              done
+              
+              # Delete the role
+              aws iam delete-role --role-name "$ROLE" || true
+            fi
+          done
+      
+      - name: Delete S3 Bucket
+        if: ${{ github.event.inputs.delete_s3 == 'true' }}
+        continue-on-error: true
+        run: |
+          echo "Deleting S3 buckets..."
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          BUCKET="${PROJECT_NAME}-storage-${ACCOUNT_ID}"
+          
+          if aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
+            echo "Emptying and deleting bucket: $BUCKET"
+            aws s3 rm "s3://$BUCKET" --recursive || true
+            aws s3api delete-bucket --bucket "$BUCKET" || true
+          fi
+      
+      - name: Delete VPC Resources
+        continue-on-error: true
+        run: |
+          echo "Finding VPCs..."
+          VPC_IDS=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=${PROJECT_NAME}-vpc" --query 'Vpcs[].VpcId' --output text)
+          
+          for VPC_ID in $VPC_IDS; do
+            if [ -n "$VPC_ID" ] && [ "$VPC_ID" != "None" ]; then
+              echo "Cleaning up VPC: $VPC_ID"
+              
+              # Delete NAT Gateways
+              NAT_GWS=$(aws ec2 describe-nat-gateways --filter "Name=vpc-id,Values=$VPC_ID" --query 'NatGateways[].NatGatewayId' --output text)
+              for NAT in $NAT_GWS; do
+                echo "Deleting NAT Gateway: $NAT"
+                aws ec2 delete-nat-gateway --nat-gateway-id "$NAT" || true
+              done
+              
+              # Delete Security Groups (except default)
+              SGS=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$VPC_ID" --query "SecurityGroups[?GroupName!='default'].GroupId" --output text)
+              for SG in $SGS; do
+                echo "Deleting security group: $SG"
+                aws ec2 delete-security-group --group-id "$SG" || true
+              done
+              
+              # Delete Subnets
+              SUBNETS=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$VPC_ID" --query 'Subnets[].SubnetId' --output text)
+              for SUBNET in $SUBNETS; do
+                echo "Deleting subnet: $SUBNET"
+                aws ec2 delete-subnet --subnet-id "$SUBNET" || true
+              done
+              
+              # Detach and delete Internet Gateways
+              IGWS=$(aws ec2 describe-internet-gateways --filters "Name=attachment.vpc-id,Values=$VPC_ID" --query 'InternetGateways[].InternetGatewayId' --output text)
+              for IGW in $IGWS; do
+                echo "Detaching and deleting internet gateway: $IGW"
+                aws ec2 detach-internet-gateway --internet-gateway-id "$IGW" --vpc-id "$VPC_ID" || true
+                aws ec2 delete-internet-gateway --internet-gateway-id "$IGW" || true
+              done
+              
+              # Delete Route Tables (except main)
+              RTS=$(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$VPC_ID" --query "RouteTables[?Associations[0].Main!=\`true\`].RouteTableId" --output text)
+              for RT in $RTS; do
+                # Delete associations first
+                ASSOCS=$(aws ec2 describe-route-tables --route-table-ids "$RT" --query 'RouteTables[0].Associations[?!Main].RouteTableAssociationId' --output text)
+                for ASSOC in $ASSOCS; do
+                  aws ec2 disassociate-route-table --association-id "$ASSOC" || true
+                done
+                echo "Deleting route table: $RT"
+                aws ec2 delete-route-table --route-table-id "$RT" || true
+              done
+              
+              # Delete VPC
+              echo "Deleting VPC: $VPC_ID"
+              aws ec2 delete-vpc --vpc-id "$VPC_ID" || true
+            fi
+          done
+      
+      - name: Delete Orphaned Internet Gateways
+        continue-on-error: true
+        run: |
+          echo "Cleaning up orphaned internet gateways..."
+          IGWS=$(aws ec2 describe-internet-gateways --filters "Name=tag:Name,Values=${PROJECT_NAME}-igw" --query 'InternetGateways[].InternetGatewayId' --output text)
+          for IGW in $IGWS; do
+            if [ -n "$IGW" ] && [ "$IGW" != "None" ]; then
+              # Get attached VPC
+              VPC_ID=$(aws ec2 describe-internet-gateways --internet-gateway-ids "$IGW" --query 'InternetGateways[0].Attachments[0].VpcId' --output text)
+              if [ -n "$VPC_ID" ] && [ "$VPC_ID" != "None" ]; then
+                echo "Detaching IGW $IGW from VPC $VPC_ID"
+                aws ec2 detach-internet-gateway --internet-gateway-id "$IGW" --vpc-id "$VPC_ID" || true
+              fi
+              echo "Deleting orphaned IGW: $IGW"
+              aws ec2 delete-internet-gateway --internet-gateway-id "$IGW" || true
+            fi
+          done
+      
+      - name: Clear Terraform State
+        continue-on-error: true
+        run: |
+          echo "Clearing Terraform state..."
+          TF_STATE_BUCKET="${PROJECT_NAME}-terraform-state"
+          
+          if aws s3api head-bucket --bucket "$TF_STATE_BUCKET" 2>/dev/null; then
+            echo "Deleting Terraform state files..."
+            aws s3 rm "s3://$TF_STATE_BUCKET/terraform.tfstate" || true
+            # Keep the bucket and DynamoDB table for future deployments
+          fi
+      
+      - name: Cleanup Summary
+        run: |
+          echo "## Cleanup Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The following resources were cleaned up:" >> $GITHUB_STEP_SUMMARY
+          echo "- Amplify apps" >> $GITHUB_STEP_SUMMARY
+          echo "- CloudWatch alarms and log groups" >> $GITHUB_STEP_SUMMARY
+          echo "- Secrets Manager secrets" >> $GITHUB_STEP_SUMMARY
+          echo "- IAM roles and policies" >> $GITHUB_STEP_SUMMARY
+          echo "- VPC resources (subnets, security groups, internet gateways, route tables)" >> $GITHUB_STEP_SUMMARY
+          echo "- DB subnet groups" >> $GITHUB_STEP_SUMMARY
+          echo "- Terraform state" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ github.event.inputs.delete_database }}" == "true" ]; then
+            echo "- RDS database instances (DATA DELETED)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- RDS database: PRESERVED (run with delete_database=true to remove)" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ "${{ github.event.inputs.delete_s3 }}" == "true" ]; then
+            echo "- S3 bucket (FILES DELETED)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- S3 bucket: PRESERVED (run with delete_s3=true to remove)" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "You can now re-run the Deploy to Production workflow to recreate infrastructure." >> $GITHUB_STEP_SUMMARY
+
+  confirm-required:
+    name: Confirmation Required
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.confirm != 'DELETE' }}
+    steps:
+      - name: Confirmation Failed
+        run: |
+          echo "::error::You must type 'DELETE' to confirm cleanup. Aborting."
+          exit 1
