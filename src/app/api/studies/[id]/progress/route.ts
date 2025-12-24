@@ -13,6 +13,15 @@ export async function GET(
         currentRow: true,
         totalRows: true,
         progressPercent: true,
+        results: {
+          select: {
+            rowData: true,
+            classifications: true,
+          },
+          orderBy: {
+            createdAt: 'asc',
+          },
+        },
       },
     });
 
@@ -20,9 +29,12 @@ export async function GET(
       return NextResponse.json({ error: 'Study not found' }, { status: 404 });
     }
 
-    return NextResponse.json({
-      status: study.status,
-      currentRow: study.currentRow,
+    return NextResponse.json(study);
+  } catch (error) {
+    console.error('Failed to fetch study progress:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
       totalRows: study.totalRows,
       progressPercent: study.progressPercent,
     });

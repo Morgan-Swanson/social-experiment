@@ -70,13 +70,24 @@ export default function StudyResultsPage() {
           setTotalRows(data.totalRows);
           setProgress(data.progressPercent);
           
-          // If study completed, stop polling and load final results
+          // Update results in real-time
+          if (data.results && data.results.length > 0) {
+            setResults(data.results);
+            
+            // Set columns from first result if not already set
+            if (columns.length === 0 && data.results[0]) {
+              const rowColumns = Object.keys(data.results[0].rowData || {});
+              const classifierColumns = Object.keys(data.results[0].classifications || {});
+              setColumns([...rowColumns, ...classifierColumns]);
+            }
+          }
+          
+          // If study completed, stop polling
           if (data.status === 'completed') {
             if (pollingIntervalRef.current) {
               clearInterval(pollingIntervalRef.current);
             }
             setIsStreaming(false);
-            fetchResults();
           } else if (data.status === 'failed') {
             if (pollingIntervalRef.current) {
               clearInterval(pollingIntervalRef.current);
