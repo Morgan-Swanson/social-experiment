@@ -131,10 +131,13 @@ export async function POST(
           classifications,
         };
         
-        // Save result immediately to database
-        await prisma.studyResult.create({
-          data: result,
-        });
+      // Save result immediately to database
+      await prisma.studyResult.create({
+        data: {
+          ...result,
+          classifications: result.classifications as any,
+        },
+      });
         
         return result;
       });
