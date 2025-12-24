@@ -220,4 +220,4 @@ This project is licensed under the GNU General Public License v3.0 - see the [LI
 - Built with [Next.js](https://nextjs.org/)
 - UI components from [shadcn/ui](https://ui.shadcn.com/)
 - AI powered by [OpenAI](https://openai.com/)
-- Development assistance from [Claude](https://claude.ai/) (Anthropic)
+- Built by [Slate](https://slate.dev/) by [Random Labs](https://randomlabs.ai/)
