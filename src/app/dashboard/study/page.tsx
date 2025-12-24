@@ -335,15 +335,13 @@ export default function StudyPage() {
 
             <div className="grid gap-2">
               <Label>Sample Size: {sampleSize} rows (max: {maxRows})</Label>
-              <input
-                type="range"
-                value={sampleSize}
-                onChange={(e) => setSampleSize(Math.min(Number(e.target.value), maxRows))}
-                min={1}
+              <Slider
+                value={[sampleSize]}
+                onValueChange={(v) => setSampleSize(v[0])}
                 max={maxRows}
+                min={1}
                 step={1}
                 disabled={!selectedDataset}
-                className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer slider"
               />
               <p className="text-xs text-muted-foreground">
                 Test your classifier on a subset of your data
