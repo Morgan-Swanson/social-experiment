@@ -140,6 +140,7 @@ model Study {
   modelProvider       String   // "openai", etc.
   modelName           String   // "gpt-4", "gpt-3.5-turbo", etc.
   modelVersion        String?  // For future pinning feature
+  temperature         Float    @default(0.0) // Model temperature (0.0-2.0)
   sampleSize          Int?     // Number of rows to process (null = all)
   status              String   @default("draft") // draft, running, completed, failed
   errorMessage        String?  @db.Text // Detailed error message when status is failed

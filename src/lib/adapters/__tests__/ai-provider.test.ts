@@ -149,6 +149,48 @@ describe('AI Provider', () => {
         })
       );
     });
+
+    it('should use default temperature of 0.0 when not provided', async () => {
+      const mockResponse = {
+        choices: [{
+          message: {
+            content: 'Score: 0.5\nReasoning: Test.',
+          },
+        }],
+      };
+
+      mockCreate.mockResolvedValue(mockResponse);
+
+      const provider = createAIProvider(mockConfig);
+      await provider.classify('Test text', 'Classify sentiment');
+
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          temperature: 0.0,
+        })
+      );
+    });
+
+    it('should use provided temperature value', async () => {
+      const mockResponse = {
+        choices: [{
+          message: {
+            content: 'Score: 0.5\nReasoning: Test.',
+          },
+        }],
+      };
+
+      mockCreate.mockResolvedValue(mockResponse);
+
+      const provider = createAIProvider(mockConfig);
+      await provider.classify('Test text', 'Classify sentiment', undefined, 0.7);
+
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          temperature: 0.7,
+        })
+      );
+    });
   });
 
   describe('batchClassify', () => {
@@ -301,6 +343,60 @@ describe('AI Provider', () => {
               content: expect.stringContaining('Always be neutral'),
             }),
           ]),
+        })
+      );
+    });
+
+    it('should use default temperature in batch when not provided', async () => {
+      const mockResponse = {
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              'classifier-1': { classification: 'positive', confidence: 0.9 },
+            }),
+          },
+        }],
+      };
+
+      mockCreate.mockResolvedValue(mockResponse);
+
+      const provider = createAIProvider(mockConfig);
+      await provider.batchClassify(
+        'Test text',
+        [{ id: 'classifier-1', prompt: 'Classify sentiment' }]
+      );
+
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          temperature: 0.0,
+        })
+      );
+    });
+
+    it('should use provided temperature in batch', async () => {
+      const mockResponse = {
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              'classifier-1': { classification: 'positive', confidence: 0.9 },
+            }),
+          },
+        }],
+      };
+
+      mockCreate.mockResolvedValue(mockResponse);
+
+      const provider = createAIProvider(mockConfig);
+      await provider.batchClassify(
+        'Test text',
+        [{ id: 'classifier-1', prompt: 'Classify sentiment' }],
+        undefined,
+        1.2
+      );
+
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          temperature: 1.2,
         })
       );
     });

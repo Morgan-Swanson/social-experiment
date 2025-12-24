@@ -19,6 +19,7 @@ export default function StudyPage() {
   const [selectedClassifiers, setSelectedClassifiers] = useState<string[]>([]);
   const [selectedConstraint, setSelectedConstraint] = useState('');
   const [selectedModel, setSelectedModel] = useState('gpt-4o');
+  const [temperature, setTemperature] = useState(0.0);
   const [sampleSize, setSampleSize] = useState(100);
   const [maxRows, setMaxRows] = useState(100);
   const [expandedErrors, setExpandedErrors] = useState<Set<string>>(new Set());
@@ -72,6 +73,7 @@ export default function StudyPage() {
         constraintId: selectedConstraint || null,
         modelProvider: 'openai',
         modelName: selectedModel,
+        temperature,
         sampleSize,
       }),
     });
@@ -206,6 +208,20 @@ export default function StudyPage() {
                 <option value="o1-preview">O1 Preview</option>
                 <option value="o1-mini">O1 Mini</option>
               </select>
+            </div>
+
+            <div className="grid gap-2">
+              <Label>Model Temperature: {temperature.toFixed(1)}</Label>
+              <Slider
+                value={[temperature]}
+                onValueChange={(v) => setTemperature(v[0])}
+                max={2.0}
+                min={0.0}
+                step={0.1}
+              />
+              <p className="text-xs text-muted-foreground">
+                0.0 = deterministic, higher values = more creative/random
+              </p>
             </div>
 
             <div className="grid gap-2">

@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { datasetId, classifierIds, constraintId, modelProvider, modelName, sampleSize } = body;
+    const { datasetId, classifierIds, constraintId, modelProvider, modelName, temperature, sampleSize } = body;
 
     if (!datasetId || !classifierIds || classifierIds.length === 0) {
       return NextResponse.json(
@@ -51,6 +51,7 @@ export async function POST(request: NextRequest) {
         modelConstraintId: constraintId,
         modelProvider,
         modelName,
+        temperature: temperature ?? 0.0,
         sampleSize,
         status: 'draft',
       },
