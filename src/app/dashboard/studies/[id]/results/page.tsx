@@ -104,43 +104,17 @@ export default function StudyResultsPage() {
         setStudy(current);
       }
 
-      // Fetch and parse results CSV
-      const response = await fetch(`/api/studies/${params.id}/export`);
-      if (response.ok) {
-        const text = await response.text();
-        
-        // Parse CSV
-        const lines = text.split('\n').filter(line => line.trim());
-        if (lines.length > 0) {
-          const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
-          setColumns(headers);
-          
-          const rows = lines.slice(1).map(line => {
-            // Handle CSV with potential commas in quoted fields
-            const values: string[] = [];
-            let currentValue = '';
-            let inQuotes = false;
-            
-            for (let char of line) {
-              if (char === '"') {
-                inQuotes = !inQuotes;
-              } else if (char === ',' && !inQuotes) {
-                values.push(currentValue.trim());
-                currentValue = '';
-              } else {
-                currentValue += char;
-              }
-            }
-            values.push(currentValue.trim());
-            
-            const row: any = {};
-            headers.forEach((header, i) => {
-              row[header] = values[i] || '';
-            });
-            return row;
-          });
-          
-          setResults(rows);
+      // Fetch results in JSON format
+      const resultsResponse = await fetch(`/api/studies/${params.id}/results`);
+      if (resultsResponse.ok) {
+        const data = await resultsResponse.json();
+        setResults(data);
+
+        // Extract columns from first result
+        if (data.length > 0) {
+          const rowColumns = Object.keys(data[0].rowData || {});
+          const classifierColumns = Object.keys(data[0].classifications || {});
+          setColumns([...rowColumns, ...classifierColumns]);
         }
       }
     } catch (error) {

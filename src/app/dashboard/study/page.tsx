@@ -374,7 +374,7 @@ export default function StudyPage() {
                       study.id === newStudyId ? 'animate-flash' : ''
                     }`}
                     onClick={() => {
-                      if (study.status === 'completed') {
+                      if (study.status === 'completed' || study.status === 'running') {
                         window.location.href = `/dashboard/studies/${study.id}/results`;
                       }
                     }}
