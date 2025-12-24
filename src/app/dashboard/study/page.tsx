@@ -51,9 +51,11 @@ export default function StudyPage() {
   // Load config from localStorage on mount
   useEffect(() => {
     const savedConfig = localStorage.getItem(STORAGE_KEY);
+    console.log('[Config] Loading from localStorage:', savedConfig);
     if (savedConfig) {
       try {
         const config: StudyConfig = JSON.parse(savedConfig);
+        console.log('[Config] Parsed config:', config);
         setSelectedDataset(config.selectedDataset || '');
         setSelectedClassifiers(config.selectedClassifiers || []);
         setSelectedConstraints(config.selectedConstraints || []);
@@ -61,8 +63,10 @@ export default function StudyPage() {
         setTemperature(config.temperature ?? 0.0);
         setSampleSize(config.sampleSize || 100);
       } catch (error) {
-        console.error('Failed to load saved config:', error);
+        console.error('[Config] Failed to load saved config:', error);
       }
+    } else {
+      console.log('[Config] No saved config found');
     }
   }, []);
 
@@ -76,6 +80,7 @@ export default function StudyPage() {
       temperature,
       sampleSize,
     };
+    console.log('[Config] Saving to localStorage:', config);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
   }, [selectedDataset, selectedClassifiers, selectedConstraints, selectedModel, temperature, sampleSize]);
 
