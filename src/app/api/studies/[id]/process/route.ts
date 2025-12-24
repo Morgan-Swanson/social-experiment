@@ -19,7 +19,11 @@ export async function POST(
             classifier: true,
           },
         },
-        modelConstraint: true,
+        constraints: {
+          include: {
+            constraint: true,
+          },
+        },
         user: {
           include: {
             apiKeys: {
@@ -84,7 +88,11 @@ export async function POST(
       prompt: sc.classifier.prompt,
     }));
 
-    const constraints = study.modelConstraint?.rules;
+    // Merge multiple constraint rules
+    const constraints = study.constraints
+      .map(sc => sc.constraint.rules)
+      .filter(Boolean)
+      .join('\n\n');
 
     // Process each row
     const results = [];

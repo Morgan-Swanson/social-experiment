@@ -124,8 +124,8 @@ model ModelConstraint {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  studies Study[]
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  studyConstraints  StudyConstraint[]
 
   @@map("model_constraints")
 }
@@ -136,7 +136,6 @@ model Study {
   name                String
   description         String?
   datasetId           String
-  modelConstraintId   String?
   modelProvider       String   // "openai", etc.
   modelName           String   // "gpt-4", "gpt-3.5-turbo", etc.
   modelVersion        String?  // For future pinning feature
@@ -150,11 +149,11 @@ model Study {
   startedAt           DateTime?
   completedAt         DateTime?
 
-  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  dataset         Dataset           @relation(fields: [datasetId], references: [id], onDelete: Cascade)
-  modelConstraint ModelConstraint?  @relation(fields: [modelConstraintId], references: [id], onDelete: SetNull)
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dataset         Dataset             @relation(fields: [datasetId], references: [id], onDelete: Cascade)
   
   classifiers     StudyClassifier[]
+  constraints     StudyConstraint[]
   results         StudyResult[]
 
   @@map("studies")
@@ -171,6 +170,19 @@ model StudyClassifier {
 
   @@unique([studyId, classifierId])
   @@map("study_classifiers")
+}
+
+// Junction table for many-to-many relationship between Studies and Constraints
+model StudyConstraint {
+  id           String @id @default(cuid())
+  studyId      String
+  constraintId String
+
+  study      Study           @relation(fields: [studyId], references: [id], onDelete: Cascade)
+  constraint ModelConstraint @relation(fields: [constraintId], references: [id], onDelete: Cascade)
+
+  @@unique([studyId, constraintId])
+  @@map("study_constraints")
 }
 
 model StudyResult {

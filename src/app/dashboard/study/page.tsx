@@ -23,7 +23,7 @@ const STORAGE_KEY = 'study-config';
 interface StudyConfig {
   selectedDataset: string;
   selectedClassifiers: string[];
-  selectedConstraint: string;
+  selectedConstraints: string[];
   selectedModel: string;
   temperature: number;
   sampleSize: number;
@@ -37,7 +37,7 @@ export default function StudyPage() {
   
   const [selectedDataset, setSelectedDataset] = useState('');
   const [selectedClassifiers, setSelectedClassifiers] = useState<string[]>([]);
-  const [selectedConstraint, setSelectedConstraint] = useState('');
+  const [selectedConstraints, setSelectedConstraints] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState('gpt-4o');
   const [temperature, setTemperature] = useState(0.0);
   const [sampleSize, setSampleSize] = useState(100);
@@ -55,7 +55,7 @@ export default function StudyPage() {
         const config: StudyConfig = JSON.parse(savedConfig);
         setSelectedDataset(config.selectedDataset || '');
         setSelectedClassifiers(config.selectedClassifiers || []);
-        setSelectedConstraint(config.selectedConstraint || '');
+        setSelectedConstraints(config.selectedConstraints || []);
         setSelectedModel(config.selectedModel || 'gpt-4o');
         setTemperature(config.temperature ?? 0.0);
         setSampleSize(config.sampleSize || 100);
@@ -70,13 +70,13 @@ export default function StudyPage() {
     const config: StudyConfig = {
       selectedDataset,
       selectedClassifiers,
-      selectedConstraint,
+      selectedConstraints,
       selectedModel,
       temperature,
       sampleSize,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
-  }, [selectedDataset, selectedClassifiers, selectedConstraint, selectedModel, temperature, sampleSize]);
+  }, [selectedDataset, selectedClassifiers, selectedConstraints, selectedModel, temperature, sampleSize]);
 
   useEffect(() => {
     fetchData();
@@ -117,6 +117,12 @@ export default function StudyPage() {
     );
   };
 
+  const handleConstraintToggle = (id: string) => {
+    setSelectedConstraints(prev =>
+      prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]
+    );
+  };
+
   const handleRunStudy = async () => {
     const response = await fetch('/api/studies', {
       method: 'POST',
@@ -124,7 +130,7 @@ export default function StudyPage() {
       body: JSON.stringify({
         datasetId: selectedDataset,
         classifierIds: selectedClassifiers,
-        constraintId: selectedConstraint || null,
+        constraintIds: selectedConstraints,
         modelProvider: 'openai',
         modelName: selectedModel,
         temperature,
@@ -259,7 +265,7 @@ export default function StudyPage() {
             </div>
 
             <div className="grid gap-2">
-              <Label>Constraints (Optional)</Label>
+              <Label>Select Constraints (optional)</Label>
               {constraints.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No constraints available</p>
               ) : (
@@ -268,10 +274,8 @@ export default function StudyPage() {
                     <div key={constraint.id} className="flex items-center gap-3">
                       <Switch
                         id={constraint.id}
-                        checked={selectedConstraint === constraint.id}
-                        onCheckedChange={(checked) => 
-                          setSelectedConstraint(checked ? constraint.id : '')
-                        }
+                        checked={selectedConstraints.includes(constraint.id)}
+                        onCheckedChange={() => handleConstraintToggle(constraint.id)}
                       />
                       <label htmlFor={constraint.id} className="text-sm cursor-pointer flex-1">
                         {constraint.name}
