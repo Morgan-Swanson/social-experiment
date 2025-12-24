@@ -6,7 +6,21 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.5"
+    }
   }
+}
+
+# AWS Provider - configured at root level to work with module count
+provider "aws" {
+  region = var.aws_region
+  
+  # Skip provider validation for local environment
+  skip_credentials_validation = var.environment == "local"
+  skip_requesting_account_id  = var.environment == "local"
+  skip_metadata_api_check     = var.environment == "local"
 }
 
 # This is the main entry point that selects between local and cloud modules
