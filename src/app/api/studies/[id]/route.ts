@@ -13,18 +13,22 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const study = await prisma.study.findUnique({
-      where: { id: params.id },
-      include: {
-        dataset: true,
-        modelConstraint: true,
-        classifiers: {
-          include: {
-            classifier: true,
-          },
+  const study = await prisma.study.findUnique({
+    where: { id: params.id },
+    include: {
+      dataset: true,
+      constraints: {
+        include: {
+          constraint: true,
         },
       },
-    });
+      classifiers: {
+        include: {
+          classifier: true,
+        },
+      },
+    },
+  });
 
     if (!study) {
       return NextResponse.json({ error: 'Study not found' }, { status: 404 });

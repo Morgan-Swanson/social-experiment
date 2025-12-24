@@ -108,7 +108,7 @@ class OpenAIProvider implements AIProvider {
 
   private parseResponse(content: string): ClassificationResult {
     const scoreMatch = content.match(/Score:\s*([\d.]+)/i);
-    const reasoningMatch = content.match(/Reasoning:\s*(.+?)(?=\n|$)/is);
+    const reasoningMatch = content.match(/Reasoning:\s*(.+?)(?=\n|$)/i);
     
     return {
       score: scoreMatch ? parseFloat(scoreMatch[1]) : 0,
