@@ -118,10 +118,8 @@ export default function StudyPage() {
     const dataset = datasets.find(d => d.id === selectedDataset);
     if (dataset) {
       setMaxRows(dataset.rowCount);
-      // Only update sample size if it's not already set or if it exceeds the new max
-      if (sampleSize === 0 || sampleSize > dataset.rowCount) {
-        setSampleSize(Math.min(100, dataset.rowCount));
-      }
+      // Always set sample size to max when dataset changes
+      setSampleSize(dataset.rowCount);
     }
   }, [selectedDataset, datasets]);
 
