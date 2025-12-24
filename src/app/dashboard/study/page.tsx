@@ -334,17 +334,27 @@ export default function StudyPage() {
             </div>
 
             <div className="grid gap-2">
-              <Label>Sample Size: {sampleSize} rows (max: {maxRows})</Label>
-              <Slider
-                value={[sampleSize]}
-                onValueChange={(v) => setSampleSize(v[0])}
-                max={maxRows}
+              <Label>Sample Size</Label>
+              <input
+                type="number"
+                value={sampleSize}
+                onChange={(e) => {
+                  const val = Math.max(1, Math.min(Number(e.target.value), maxRows));
+                  setSampleSize(val);
+                }}
                 min={1}
-                step={1}
+                max={maxRows}
                 disabled={!selectedDataset}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
               />
+              <div className="w-full bg-muted rounded-full h-2">
+                <div
+                  className="bg-primary h-2 rounded-full transition-all"
+                  style={{ width: `${(sampleSize / maxRows) * 100}%` }}
+                />
+              </div>
               <p className="text-xs text-muted-foreground">
-                Test your classifier on a subset of your data
+                Using {sampleSize} of {maxRows} rows ({Math.round((sampleSize / maxRows) * 100)}%)
               </p>
             </div>
 
