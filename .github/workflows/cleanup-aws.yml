@@ -76,6 +76,7 @@ jobs:
         continue-on-error: true
         run: |
           echo "Deleting DB subnet groups..."
+          # Try both contains and exact match
           DB_SUBNET_GROUPS=$(aws rds describe-db-subnet-groups --query "DBSubnetGroups[?contains(DBSubnetGroupName, '$PROJECT_NAME')].DBSubnetGroupName" --output text)
           for SG in $DB_SUBNET_GROUPS; do
             if [ -n "$SG" ] && [ "$SG" != "None" ]; then
@@ -83,6 +84,10 @@ jobs:
               aws rds delete-db-subnet-group --db-subnet-group-name "$SG" || true
             fi
           done
+          
+          # Also try to delete the exact expected name
+          echo "Attempting to delete ${PROJECT_NAME}-db-subnet..."
+          aws rds delete-db-subnet-group --db-subnet-group-name "${PROJECT_NAME}-db-subnet" 2>/dev/null || true
       
       - name: Delete CloudWatch Alarms
         continue-on-error: true
