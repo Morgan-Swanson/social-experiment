@@ -64,6 +64,14 @@ jobs:
           else
             echo "DynamoDB table already exists"
           fi
+          
+          # Clear stale DynamoDB digest if state file is empty/corrupted
+          STATE_KEY="${TF_STATE_BUCKET}/terraform.tfstate"
+          if aws dynamodb get-item --table-name $TF_LOCK_TABLE --key "{\"LockID\": {\"S\": \"$STATE_KEY-md5\"}}" 2>/dev/null | grep -q "Digest"; then
+            echo "Found stale DynamoDB digest entry. Clearing..."
+            aws dynamodb delete-item --table-name $TF_LOCK_TABLE --key "{\"LockID\": {\"S\": \"$STATE_KEY-md5\"}}" || true
+            echo "Digest cleared"
+          fi
       
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
