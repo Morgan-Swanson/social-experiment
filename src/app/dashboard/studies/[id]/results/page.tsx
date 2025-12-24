@@ -95,10 +95,10 @@ export default function StudyResultsPage() {
         }
       } else if (data.type === 'complete') {
         clearTimeout(timeoutId);
-        // Study completed, close stream and load final results
+        // Study completed, close stream
         eventSource.close();
         setIsStreaming(false);
-        fetchResults();
+        // Don't fetch results again - we already have them from streaming
       }
     };
 
@@ -224,10 +224,17 @@ export default function StudyResultsPage() {
               <CardTitle>Classification Results</CardTitle>
               <CardDescription>
                 {isStreaming ? (
-                  <span className="flex items-center gap-2 text-primary">
-                    <Activity className="h-4 w-4 animate-pulse" />
-                    Processing row {currentRow} of {totalRows} ({Math.round(progress)}%)
-                  </span>
+                  currentRow === 0 && totalRows === 0 ? (
+                    <span className="flex items-center gap-2 text-yellow-600">
+                      <Activity className="h-4 w-4 animate-pulse" />
+                      Initializing...
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2 text-primary">
+                      <Activity className="h-4 w-4 animate-pulse" />
+                      Processing row {currentRow} of {totalRows} ({Math.round(progress)}%)
+                    </span>
+                  )
                 ) : (
                   `${results.length} rows processed`
                 )}
