@@ -512,8 +512,9 @@ output "deployment_instructions" {
     
     2. Add Amplify environment variables in AWS Console:
        - DATABASE_URL: (retrieve from Secrets Manager: ${aws_secretsmanager_secret.database_url.name})
-       - OPENAI_API_KEY: (retrieve from Secrets Manager: ${aws_secretsmanager_secret.openai_key.name})
        - NEXTAUTH_SECRET: (retrieve from Secrets Manager: ${aws_secretsmanager_secret.nextauth_secret.name})
+       
+       (Users provide their own OpenAI API keys through the application)
     
     3. Deploy the application:
        - Amplify will auto-deploy on push to ${var.github_branch}
