@@ -44,6 +44,9 @@ export default function StudyResultsPage() {
         } else if (current?.status === 'completed') {
           // Load completed results
           fetchResults();
+        } else {
+          // Study in other state (pending, failed), still try to load any existing results
+          fetchResults();
         }
       }
     } catch (error) {
@@ -60,12 +63,23 @@ export default function StudyResultsPage() {
     const eventSource = new EventSource(`/api/studies/${params.id}/stream`);
     eventSourceRef.current = eventSource;
 
+    // Add timeout to check if study completed while we were connecting
+    const timeoutId = setTimeout(() => {
+      // If we haven't received any row_complete events after 5 seconds, check status
+      if (results.length === 0) {
+        console.log('No streaming data received, checking if study completed');
+        fetchStudyStatus();
+      }
+    }, 5000);
+
     eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
 
       if (data.type === 'connected') {
         console.log('Connected to study stream');
       } else if (data.type === 'row_complete') {
+        clearTimeout(timeoutId); // Clear timeout since we got data
+        
         // Add new row to results
         setCurrentRow(data.rowIndex + 1);
         setTotalRows(data.totalRows);
@@ -80,6 +94,7 @@ export default function StudyResultsPage() {
           setColumns([...rowColumns, ...classifierColumns]);
         }
       } else if (data.type === 'complete') {
+        clearTimeout(timeoutId);
         // Study completed, close stream and load final results
         eventSource.close();
         setIsStreaming(false);
@@ -88,6 +103,7 @@ export default function StudyResultsPage() {
     };
 
     eventSource.onerror = () => {
+      clearTimeout(timeoutId);
       eventSource.close();
       setIsStreaming(false);
       fetchResults(); // Fallback to regular fetch
