@@ -70,6 +70,30 @@ jobs:
         with:
           terraform_version: 1.6.0
       
+      - name: Clear Stale Terraform Locks
+        working-directory: ./terraform
+        continue-on-error: true
+        run: |
+          # First try to init to get the lock info
+          terraform init \
+            -backend-config="bucket=$TF_STATE_BUCKET" \
+            -backend-config="key=terraform.tfstate" \
+            -backend-config="region=$AWS_REGION" \
+            -backend-config="dynamodb_table=$TF_LOCK_TABLE" \
+            -backend-config="encrypt=true" 2>&1 | tee init_output.txt || true
+          
+          # Extract lock ID if there's a lock error
+          if grep -q "Error acquiring the state lock" init_output.txt; then
+            LOCK_ID=$(grep "ID:" init_output.txt | awk '{print $2}')
+            if [ -n "$LOCK_ID" ]; then
+              echo "Found stale lock: $LOCK_ID"
+              echo "Force unlocking..."
+              terraform force-unlock -force "$LOCK_ID" || true
+            fi
+          fi
+          
+          rm -f init_output.txt
+      
       - name: Terraform Init
         working-directory: ./terraform
         run: |
