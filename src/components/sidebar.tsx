@@ -9,6 +9,7 @@ import {
   FlaskConical,
   User,
   Settings,
+  HelpCircle,
 } from 'lucide-react';
 
 const navigation = [
@@ -17,6 +18,7 @@ const navigation = [
   { name: 'Constraints', href: '/dashboard/constraints', icon: Settings },
   { name: 'Studies', href: '/dashboard/study', icon: FlaskConical },
   { name: 'Account', href: '/dashboard/account', icon: User },
+  { name: 'Support', href: '/dashboard/support', icon: HelpCircle },
 ];
 
 export function Sidebar() {
