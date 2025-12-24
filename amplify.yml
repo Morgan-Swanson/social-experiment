@@ -5,10 +5,10 @@ frontend:
       commands:
         - npm ci --cache .npm --prefer-offline
         # Write environment variables to .env.production for Next.js SSR runtime
-        # Use single quotes to prevent shell interpretation of special characters
-        - echo "DATABASE_URL='$DATABASE_URL'" >> .env.production
-        - echo "NEXTAUTH_SECRET='$NEXTAUTH_SECRET'" >> .env.production
-        - echo "NEXTAUTH_URL='$NEXTAUTH_URL'" >> .env.production
+        # DATABASE_URL password is now URL-encoded in Secrets Manager
+        - echo "DATABASE_URL=$DATABASE_URL" >> .env.production
+        - echo "NEXTAUTH_SECRET=$NEXTAUTH_SECRET" >> .env.production
+        - echo "NEXTAUTH_URL=$NEXTAUTH_URL" >> .env.production
     build:
       commands:
         - npm run build
