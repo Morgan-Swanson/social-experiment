@@ -1,6 +1,6 @@
 import { vi } from 'vitest';
 
-// Conditionally setup jsdom only if we're actually in a jsdom environment
+// Check if we're in jsdom environment
 const isBrowser = typeof window !== 'undefined' && typeof document !== 'undefined';
 
 // Mock Next.js navigation (works in both node and jsdom environments)
@@ -20,26 +20,24 @@ vi.mock('next/navigation', () => ({
   notFound: vi.fn(),
 }));
 
-// Only load React and jsdom-specific code when in jsdom environment
+// Only load React and jsdom dependencies if actually in jsdom
 if (isBrowser) {
-  // Async setup for jsdom environment
-  (async () => {
-    const React = await import('react');
-    
-    // Make React available globally for JSX transform
-    (globalThis as any).React = React.default || React;
-    
-    // Load jest-dom matchers
-    await import('@testing-library/jest-dom');
-    
-    // Mock Next.js Link with React
-    vi.mock('next/link', () => ({
-      default: ({ children, href, ...props }: any) =>
-        (React.default || React).createElement('a', { href, ...props }, children),
-    }));
-  })();
+  // Synchronously import React for jsdom environment
+  const React = require('react');
+  
+  // Make React available globally for JSX transform
+  (globalThis as any).React = React;
+  
+  // Load jest-dom matchers synchronously
+  require('@testing-library/jest-dom');
+  
+  // Mock Next.js Link with React - must be done after React is loaded
+  vi.mock('next/link', () => ({
+    default: ({ children, href, ...props }: any) =>
+      React.createElement('a', { href, ...props }, children),
+  }));
 } else {
-  // Simple mock for non-jsdom environment
+  // Mock for non-jsdom environment without React dependency
   vi.mock('next/link', () => ({
     default: ({ children, href, ...props }: any) => ({
       type: 'a',
