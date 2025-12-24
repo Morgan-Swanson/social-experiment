@@ -10,7 +10,8 @@ const envVars = [
 let content = '';
 for (const { name, value } of envVars) {
   if (value) {
-    content += `${name}=${value}\n`;
+    // Quote values to handle special characters like # (which starts comments in .env files)
+    content += `${name}="${value}"\n`;
   }
 }
 
