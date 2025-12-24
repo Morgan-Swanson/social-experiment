@@ -33,8 +33,23 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
   }
+}
+
+@layer utilities {
+  @keyframes flash {
+    0%, 100% {
+      background-color: transparent;
+    }
+    50% {
+      background-color: rgb(229 231 235);
+    }
+  }
+
+  .animate-flash {
+    animation: flash 500ms ease-in-out;
+  }
+}
 }
 
 /* Custom scrollbar for dark theme */

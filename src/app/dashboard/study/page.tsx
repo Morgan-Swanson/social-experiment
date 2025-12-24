@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import '@/app/globals.css';
 import { ChevronDown, ChevronUp, Loader2, Trash2 } from 'lucide-react';
 import { Play, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -42,7 +43,7 @@ export default function StudyPage() {
   const [sampleSize, setSampleSize] = useState(100);
   const [maxRows, setMaxRows] = useState(100);
   const [expandedErrors, setExpandedErrors] = useState<Set<string>>(new Set());
-  const [isFlashing, setIsFlashing] = useState(false);
+  const [newStudyId, setNewStudyId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [studyToDelete, setStudyToDelete] = useState<string | null>(null);
 
@@ -117,10 +118,6 @@ export default function StudyPage() {
   };
 
   const handleRunStudy = async () => {
-    // Trigger flash animation
-    setIsFlashing(true);
-    setTimeout(() => setIsFlashing(false), 600);
-
     const response = await fetch('/api/studies', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -136,6 +133,9 @@ export default function StudyPage() {
     });
 
     if (response.ok) {
+      const newStudy = await response.json();
+      setNewStudyId(newStudy.id);
+      setTimeout(() => setNewStudyId(null), 500);
       fetchData();
       // Configuration is retained - no reset
     }
@@ -323,7 +323,7 @@ export default function StudyPage() {
             <Button
               onClick={handleRunStudy}
               disabled={!selectedDataset || selectedClassifiers.length === 0}
-              className={`w-full transition-all ${isFlashing ? 'animate-pulse bg-primary/80' : ''}`}
+              className="w-full"
             >
               <Play className="h-4 w-4 mr-2" />
               Run Study
