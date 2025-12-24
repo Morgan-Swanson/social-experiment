@@ -161,11 +161,17 @@ export default function StudyResultsPage() {
                     {result.rowData[key]}
                   </td>
                 ))}
-                {Object.keys(result.classifications || {}).map((classifierId, j) => (
-                  <td key={`class-${j}`} className="p-2 whitespace-nowrap">
-                    {result.classifications[classifierId]}
-                  </td>
-                ))}
+                {Object.keys(result.classifications || {}).map((classifierId, j) => {
+                  const classification = result.classifications[classifierId];
+                  const displayValue = typeof classification === 'object' 
+                    ? (classification.reasoning || classification.score || '') 
+                    : classification;
+                  return (
+                    <td key={`class-${j}`} className="p-2 whitespace-nowrap">
+                      {displayValue}
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>
