@@ -396,9 +396,10 @@ resource "aws_iam_role_policy" "amplify_secrets" {
 }
 
 # AWS Amplify App
+# Note: GitHub connection must be done manually in AWS Console after creation
+# Terraform cannot connect to GitHub without an OAuth token
 resource "aws_amplify_app" "main" {
-  name       = var.project_name
-  repository = "https://github.com/${var.github_repo}"
+  name = var.project_name
 
   # Build settings for Next.js
   build_spec = <<-EOT
@@ -443,20 +444,6 @@ resource "aws_amplify_app" "main" {
   }
 }
 
-resource "aws_amplify_branch" "main" {
-  app_id      = aws_amplify_app.main.id
-  branch_name = var.github_branch
-
-  framework = "Next.js - SSR"
-  stage     = "PRODUCTION"
-
-  enable_auto_build = true
-
-  tags = {
-    Name = "${var.project_name}-${var.github_branch}"
-  }
-}
-
 # Data sources
 data "aws_caller_identity" "current" {}
 
@@ -485,8 +472,8 @@ output "amplify_app_id" {
 }
 
 output "amplify_default_domain" {
-  value       = "https://main.${aws_amplify_app.main.default_domain}"
-  description = "Amplify default domain URL"
+  value       = "https://${aws_amplify_app.main.default_domain}"
+  description = "Amplify default domain URL (connect GitHub to get branch URL)"
 }
 
 output "vpc_id" {
@@ -503,25 +490,26 @@ output "deployment_instructions" {
     AWS Infrastructure Deployed Successfully!
     
     Next Steps:
-    1. Connect GitHub to Amplify (manual step in AWS Console):
+    1. Connect GitHub to Amplify (one-time manual step in AWS Console):
        - Go to: https://console.aws.amazon.com/amplify/home?region=${var.aws_region}#/${aws_amplify_app.main.id}
-       - Click "Connect GitHub" and authorize access
+       - Click "Host web app" > "GitHub"
+       - Authorize AWS Amplify to access your GitHub account
        - Select repository: ${var.github_repo}
-       - Branch: ${var.github_branch}
+       - Select branch: ${var.github_branch}
+       - Use existing build settings (already configured)
     
-    2. Add Amplify environment variables in AWS Console:
-       - NEXTAUTH_URL: https://main.${aws_amplify_app.main.default_domain}
+    2. Add Amplify environment variables in AWS Console (Hosting > Environment variables):
        - DATABASE_URL: (retrieve from Secrets Manager: ${aws_secretsmanager_secret.database_url.name})
        - NEXTAUTH_SECRET: (retrieve from Secrets Manager: ${aws_secretsmanager_secret.nextauth_secret.name})
+       - NEXTAUTH_URL: (will be the Amplify URL after first deploy)
        
        (Users provide their own OpenAI API keys through the application)
     
     3. Deploy the application:
-       - Amplify will auto-deploy on push to ${var.github_branch}
-       - Or manually trigger deployment in Amplify Console
+       - Amplify will auto-deploy after GitHub connection
+       - Future pushes to ${var.github_branch} will auto-deploy
     
-    4. Access your application:
-       - URL: https://main.${aws_amplify_app.main.default_domain}
+    4. After first deploy, update NEXTAUTH_URL with actual Amplify URL
     
     Monthly Cost Estimate: $20-30 (excluding OpenAI API usage)
   EOT

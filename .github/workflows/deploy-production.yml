@@ -92,40 +92,112 @@ jobs:
           # Import VPC if exists
           VPC_ID=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=social-experiment-vpc" --query 'Vpcs[0].VpcId' --output text 2>/dev/null || echo "None")
           if [ "$VPC_ID" != "None" ] && [ "$VPC_ID" != "" ]; then
+            echo "Found VPC: $VPC_ID"
             terraform import 'module.cloud[0].aws_vpc.main' "$VPC_ID" 2>/dev/null || echo "VPC already in state or import failed"
+            
+            # Import subnets
+            for SUBNET_NAME in "public-a" "public-b" "private-a" "private-b"; do
+              SUBNET_ID=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=social-experiment-${SUBNET_NAME}" --query 'Subnets[0].SubnetId' --output text 2>/dev/null || echo "None")
+              if [ "$SUBNET_ID" != "None" ] && [ "$SUBNET_ID" != "" ]; then
+                RESOURCE_NAME=$(echo $SUBNET_NAME | tr '-' '_')
+                echo "Importing subnet $SUBNET_NAME: $SUBNET_ID"
+                terraform import "module.cloud[0].aws_subnet.${RESOURCE_NAME}" "$SUBNET_ID" 2>/dev/null || echo "Subnet $SUBNET_NAME already in state"
+              fi
+            done
+            
+            # Import internet gateway
+            IGW_ID=$(aws ec2 describe-internet-gateways --filters "Name=tag:Name,Values=social-experiment-igw" --query 'InternetGateways[0].InternetGatewayId' --output text 2>/dev/null || echo "None")
+            if [ "$IGW_ID" != "None" ] && [ "$IGW_ID" != "" ]; then
+              echo "Importing internet gateway: $IGW_ID"
+              terraform import 'module.cloud[0].aws_internet_gateway.main' "$IGW_ID" 2>/dev/null || echo "IGW already in state"
+            fi
+            
+            # Import route table
+            RT_ID=$(aws ec2 describe-route-tables --filters "Name=tag:Name,Values=social-experiment-public-rt" --query 'RouteTables[0].RouteTableId' --output text 2>/dev/null || echo "None")
+            if [ "$RT_ID" != "None" ] && [ "$RT_ID" != "" ]; then
+              echo "Importing route table: $RT_ID"
+              terraform import 'module.cloud[0].aws_route_table.public' "$RT_ID" 2>/dev/null || echo "Route table already in state"
+              
+              # Import route table associations
+              PUBLIC_A_SUBNET=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=social-experiment-public-a" --query 'Subnets[0].SubnetId' --output text 2>/dev/null || echo "None")
+              PUBLIC_B_SUBNET=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=social-experiment-public-b" --query 'Subnets[0].SubnetId' --output text 2>/dev/null || echo "None")
+              
+              if [ "$PUBLIC_A_SUBNET" != "None" ]; then
+                ASSOC_A=$(aws ec2 describe-route-tables --route-table-ids "$RT_ID" --query "RouteTables[0].Associations[?SubnetId=='$PUBLIC_A_SUBNET'].RouteTableAssociationId" --output text 2>/dev/null || echo "None")
+                if [ "$ASSOC_A" != "None" ] && [ "$ASSOC_A" != "" ]; then
+                  echo "Importing route table association A: $ASSOC_A"
+                  terraform import 'module.cloud[0].aws_route_table_association.public_a' "$ASSOC_A" 2>/dev/null || echo "Association A already in state"
+                fi
+              fi
+              
+              if [ "$PUBLIC_B_SUBNET" != "None" ]; then
+                ASSOC_B=$(aws ec2 describe-route-tables --route-table-ids "$RT_ID" --query "RouteTables[0].Associations[?SubnetId=='$PUBLIC_B_SUBNET'].RouteTableAssociationId" --output text 2>/dev/null || echo "None")
+                if [ "$ASSOC_B" != "None" ] && [ "$ASSOC_B" != "" ]; then
+                  echo "Importing route table association B: $ASSOC_B"
+                  terraform import 'module.cloud[0].aws_route_table_association.public_b' "$ASSOC_B" 2>/dev/null || echo "Association B already in state"
+                fi
+              fi
+            fi
+            
+            # Import security group
+            SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=social-experiment-db-sg" "Name=vpc-id,Values=$VPC_ID" --query 'SecurityGroups[0].GroupId' --output text 2>/dev/null || echo "None")
+            if [ "$SG_ID" != "None" ] && [ "$SG_ID" != "" ]; then
+              echo "Importing security group: $SG_ID"
+              terraform import 'module.cloud[0].aws_security_group.db' "$SG_ID" 2>/dev/null || echo "Security group already in state"
+            fi
           fi
           
           # Import S3 bucket if exists
           if aws s3api head-bucket --bucket social-experiment-storage-423231905077 2>/dev/null; then
-            terraform import 'module.cloud[0].aws_s3_bucket.storage' "social-experiment-storage-423231905077" 2>/dev/null || echo "S3 bucket already in state or import failed"
+            echo "Importing S3 bucket"
+            terraform import 'module.cloud[0].aws_s3_bucket.storage' "social-experiment-storage-423231905077" 2>/dev/null || echo "S3 bucket already in state"
           fi
           
           # Import IAM roles if exist
           if aws iam get-role --role-name social-experiment-app-role 2>/dev/null; then
-            terraform import 'module.cloud[0].aws_iam_role.app' "social-experiment-app-role" 2>/dev/null || echo "App role already in state or import failed"
+            echo "Importing app IAM role"
+            terraform import 'module.cloud[0].aws_iam_role.app' "social-experiment-app-role" 2>/dev/null || echo "App role already in state"
           fi
           
           if aws iam get-role --role-name social-experiment-amplify-role 2>/dev/null; then
-            terraform import 'module.cloud[0].aws_iam_role.amplify' "social-experiment-amplify-role" 2>/dev/null || echo "Amplify role already in state or import failed"
+            echo "Importing amplify IAM role"
+            terraform import 'module.cloud[0].aws_iam_role.amplify' "social-experiment-amplify-role" 2>/dev/null || echo "Amplify role already in state"
           fi
           
           # Import Secrets Manager secrets if exist
           if aws secretsmanager describe-secret --secret-id "social-experiment/database-url" 2>/dev/null; then
-            terraform import 'module.cloud[0].aws_secretsmanager_secret.database_url' "social-experiment/database-url" 2>/dev/null || echo "Database secret already in state or import failed"
+            echo "Importing database URL secret"
+            terraform import 'module.cloud[0].aws_secretsmanager_secret.database_url' "social-experiment/database-url" 2>/dev/null || echo "Database secret already in state"
           fi
           
           if aws secretsmanager describe-secret --secret-id "social-experiment/nextauth-secret" 2>/dev/null; then
-            terraform import 'module.cloud[0].aws_secretsmanager_secret.nextauth_secret' "social-experiment/nextauth-secret" 2>/dev/null || echo "NextAuth secret already in state or import failed"
+            echo "Importing nextauth secret"
+            terraform import 'module.cloud[0].aws_secretsmanager_secret.nextauth_secret' "social-experiment/nextauth-secret" 2>/dev/null || echo "NextAuth secret already in state"
           fi
           
           # Import CloudWatch log group if exists
           if aws logs describe-log-groups --log-group-name-prefix "/aws/amplify/social-experiment" --query 'logGroups[0].logGroupName' --output text 2>/dev/null | grep -q "social-experiment"; then
-            terraform import 'module.cloud[0].aws_cloudwatch_log_group.app' "/aws/amplify/social-experiment" 2>/dev/null || echo "Log group already in state or import failed"
+            echo "Importing CloudWatch log group"
+            terraform import 'module.cloud[0].aws_cloudwatch_log_group.app' "/aws/amplify/social-experiment" 2>/dev/null || echo "Log group already in state"
           fi
           
           # Import DB subnet group if exists
           if aws rds describe-db-subnet-groups --db-subnet-group-name social-experiment-db-subnet 2>/dev/null; then
-            terraform import 'module.cloud[0].aws_db_subnet_group.main' "social-experiment-db-subnet" 2>/dev/null || echo "DB subnet group already in state or import failed"
+            echo "Importing DB subnet group"
+            terraform import 'module.cloud[0].aws_db_subnet_group.main' "social-experiment-db-subnet" 2>/dev/null || echo "DB subnet group already in state"
+          fi
+          
+          # Import RDS instance if exists
+          if aws rds describe-db-instances --db-instance-identifier social-experiment-db 2>/dev/null; then
+            echo "Importing RDS instance"
+            terraform import 'module.cloud[0].aws_db_instance.postgres' "social-experiment-db" 2>/dev/null || echo "RDS instance already in state"
+          fi
+          
+          # Import Amplify app if exists
+          AMPLIFY_APP_ID=$(aws amplify list-apps --query "apps[?name=='social-experiment'].appId" --output text 2>/dev/null || echo "None")
+          if [ "$AMPLIFY_APP_ID" != "None" ] && [ "$AMPLIFY_APP_ID" != "" ]; then
+            echo "Importing Amplify app: $AMPLIFY_APP_ID"
+            terraform import 'module.cloud[0].aws_amplify_app.main' "$AMPLIFY_APP_ID" 2>/dev/null || echo "Amplify app already in state"
           fi
           
           echo "Import check complete"
