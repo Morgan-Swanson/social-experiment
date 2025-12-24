@@ -2,7 +2,6 @@
 const nextConfig = {
   experimental: {
     serverActions: true,
-    instrumentationHook: true,
   },
   images: {
     domains: ['lh3.googleusercontent.com'],
