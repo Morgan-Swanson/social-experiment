@@ -97,9 +97,9 @@ export async function POST(
       .filter(Boolean)
       .join('\n\n');
 
-    // Process each row with progress tracking
-    const results = [];
+    // Process rows with parallel batching
     const totalRows = sampleData.length;
+    const CONCURRENCY_LIMIT = 5; // Process 5 rows at a time
     
     // Update total rows
     await prisma.study.update({
@@ -107,43 +107,60 @@ export async function POST(
       data: { totalRows },
     });
     
-    for (let i = 0; i < sampleData.length; i++) {
-      const row = sampleData[i] as any;
-      const textColumn = Object.values(row).find(v => typeof v === 'string' && v.length > 10);
-      const text = textColumn?.toString() || '';
+    let completedRows = 0;
+    
+    // Process rows in batches with controlled concurrency
+    const processBatch = async (batchRows: any[], startIndex: number) => {
+      const promises = batchRows.map(async (row, batchIdx) => {
+        const globalIdx = startIndex + batchIdx;
+        const textColumn = Object.values(row).find(v => typeof v === 'string' && v.length > 10);
+        const text = textColumn?.toString() || '';
 
-      // Batch classify with all classifiers
-      const classifications = await aiProvider.batchClassify(
-        text,
-        classifierPrompts,
-        constraints,
-        study.temperature
-      );
+        // Batch classify with all classifiers
+        const classifications = await aiProvider.batchClassify(
+          text,
+          classifierPrompts,
+          constraints,
+          study.temperature
+        );
 
-      const result = {
-        studyId: study.id,
-        rowId: row.id || JSON.stringify(row),
-        rowData: row,
-        classifications,
-      };
-      
-      // Save result immediately to database
-      await prisma.studyResult.create({
-        data: result,
+        const result = {
+          studyId: study.id,
+          rowId: row.id || JSON.stringify(row),
+          rowData: row,
+          classifications,
+        };
+        
+        // Save result immediately to database
+        await prisma.studyResult.create({
+          data: result,
+        });
+        
+        return result;
       });
       
-      results.push(result);
-
-      // Update progress in database
-      const currentRow = i + 1;
-      const progressPercent = (currentRow / totalRows) * 100;
+      const batchResults = await Promise.all(promises);
+      
+      // Update progress after batch completes
+      completedRows += batchRows.length;
+      const progressPercent = (completedRows / totalRows) * 100;
       await prisma.study.update({
         where: { id: params.id },
         data: {
-          currentRow,
+          currentRow: completedRows,
           progressPercent,
         },
       });
+      
+      return batchResults;
+    };
+    
+    // Process all rows in batches
+    const results = [];
+    for (let i = 0; i < sampleData.length; i += CONCURRENCY_LIMIT) {
+      const batch = sampleData.slice(i, Math.min(i + CONCURRENCY_LIMIT, sampleData.length));
+      const batchResults = await processBatch(batch, i);
+      results.push(...batchResults);
     }
 
     // Update study status
