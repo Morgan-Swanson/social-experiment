@@ -4,7 +4,8 @@ import path from 'path';
 export default defineConfig({
   test: {
     globals: true,
-    environment: 'node',
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],
@@ -15,8 +16,16 @@ export default defineConfig({
         '**/*.config.{js,ts}',
         '**/types.ts',
         'prisma/migrations/',
+        'src/test/**',
+        'src/lib/__mocks__/**',
       ],
     },
+    environmentMatchGlobs: [
+      // Use node environment for API route tests
+      ['src/app/api/**/*.test.ts', 'node'],
+      // Use jsdom for component tests
+      ['src/components/**/*.test.tsx', 'jsdom'],
+    ],
   },
   resolve: {
     alias: {
