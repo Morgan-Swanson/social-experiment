@@ -243,15 +243,15 @@ export default function StudyPage() {
               ) : (
                 <div className="space-y-3">
                   {classifiers.map((classifier) => (
-                    <div key={classifier.id} className="flex items-center justify-between">
-                      <label htmlFor={classifier.id} className="text-sm cursor-pointer flex-1">
-                        {classifier.name}
-                      </label>
+                    <div key={classifier.id} className="flex items-center gap-3">
                       <Switch
                         id={classifier.id}
                         checked={selectedClassifiers.includes(classifier.id)}
                         onCheckedChange={() => handleClassifierToggle(classifier.id)}
                       />
+                      <label htmlFor={classifier.id} className="text-sm cursor-pointer flex-1">
+                        {classifier.name}
+                      </label>
                     </div>
                   ))}
                 </div>
