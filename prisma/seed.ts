@@ -30,7 +30,7 @@ async function main() {
     create: {
       id: 'classifier-sentiment',
       name: 'Sentiment Analysis',
-      prompt: 'Classify the sentiment of this text as: positive, negative, or neutral. Return a confidence score (0.0-1.0).',
+      prompt: 'Classify the sentiment of this text as: positive, negative, or neutral.',
       userId: user.id,
     },
   });
@@ -41,7 +41,7 @@ async function main() {
     create: {
       id: 'classifier-ideology',
       name: 'Political Ideology',
-      prompt: 'Classify the political ideology as: liberal, conservative, moderate, libertarian, or socialist. Return a confidence score (0.0-1.0).',
+      prompt: 'Classify the political ideology expressed in this text. Choose from: liberal, conservative, moderate, libertarian, or socialist.',
       userId: user.id,
     },
   });
@@ -52,7 +52,7 @@ async function main() {
     create: {
       id: 'classifier-topic',
       name: 'Topic Classification',
-      prompt: 'Identify the primary topic as: economy, healthcare, education, foreign_policy, environment, social_issues, immigration, or crime. Return a confidence score (0.0-1.0).',
+      prompt: 'Identify the primary topic discussed in this text. Choose from: economy, healthcare, education, foreign_policy, environment, social_issues, immigration, or crime.',
       userId: user.id,
     },
   });
@@ -64,13 +64,46 @@ async function main() {
   ]);
 
   // Create sample model constraints
+  const comprehensiveConstraint = await prisma.modelConstraint.upsert({
+    where: { id: 'constraint-comprehensive' },
+    update: {},
+    create: {
+      id: 'constraint-comprehensive',
+      name: 'Comprehensive Classification Guidelines',
+      rules: `CLASSIFICATION GUIDELINES:
+
+1. CONFIDENCE SCORING (0.0-1.0 scale):
+   - Use confidence scores between 0.0 and 1.0
+   - Scores below 0.6: Uncertain, ambiguous, or multiple interpretations possible
+   - Scores 0.6-0.8: Moderately confident, clear indicators present
+   - Scores above 0.8: Highly confident, strong and unambiguous indicators
+
+2. REASONING REQUIREMENTS:
+   - Provide detailed reasoning that cites specific words, phrases, or patterns from the text
+   - Reasoning should be at least 2-3 sentences explaining the classification decision
+   - Quote relevant portions of the text that support your classification
+   - Explain why alternative classifications were rejected
+
+3. CLASSIFICATION APPROACH:
+   - Read the entire text carefully before classifying
+   - Consider context and implicit meaning, not just explicit keywords
+   - Be aware of sarcasm, irony, and rhetorical devices
+   - When multiple categories could apply, choose the most prominent or central theme
+
+4. OUTPUT FORMAT:
+   - For single classification: Provide response in format "Score: [0.0-1.0]\\nReasoning: [explanation]"
+   - For batch classification: Use the required JSON format with task IDs as keys`,
+      userId: user.id,
+    },
+  });
+
   const scoringConstraint = await prisma.modelConstraint.upsert({
     where: { id: 'constraint-scoring' },
     update: {},
     create: {
       id: 'constraint-scoring',
-      name: 'Scoring Rules',
-      rules: 'All classifications must include a confidence score between 0-100. When unsure, scores should be below 60. Only assign scores above 80 when the classification is highly certain.',
+      name: 'Basic Scoring Rules',
+      rules: 'Provide confidence scores between 0.0 and 1.0. Lower scores (below 0.6) indicate uncertainty. Higher scores (above 0.8) indicate strong confidence.',
       userId: user.id,
     },
   });
@@ -80,13 +113,14 @@ async function main() {
     update: {},
     create: {
       id: 'constraint-reasoning',
-      name: 'Reasoning Requirements',
-      rules: 'All classifications must include detailed reasoning that cites specific words, phrases, or patterns from the text. Reasoning should be at least 2-3 sentences explaining the classification decision.',
+      name: 'Detailed Reasoning',
+      rules: 'Provide detailed reasoning that cites specific words, phrases, or patterns from the text. Include at least 2-3 sentences explaining your classification decision.',
       userId: user.id,
     },
   });
 
   console.log('Created constraints:', [
+    comprehensiveConstraint.name,
     scoringConstraint.name,
     reasoningConstraint.name,
   ]);

@@ -4,6 +4,7 @@ export interface AIProviderConfig {
   apiKey: string;
   model: string;
   modelVersion?: string;
+  temperature?: number;
 }
 
 export interface ClassificationResult {
@@ -13,11 +14,12 @@ export interface ClassificationResult {
 }
 
 export interface AIProvider {
-  classify(text: string, prompt: string, constraints?: string): Promise<ClassificationResult>;
+  classify(text: string, prompt: string, constraints?: string, temperature?: number): Promise<ClassificationResult>;
   batchClassify(
     text: string,
     prompts: { id: string; prompt: string }[],
-    constraints?: string
+    constraints?: string,
+    temperature?: number
   ): Promise<{ [id: string]: ClassificationResult }>;
 }
 
@@ -32,7 +34,7 @@ class OpenAIProvider implements AIProvider {
     this.model = config.model;
   }
 
-  async classify(text: string, prompt: string, constraints?: string): Promise<ClassificationResult> {
+  async classify(text: string, prompt: string, constraints?: string, temperature?: number): Promise<ClassificationResult> {
     const systemMessage = this.buildSystemMessage(constraints);
     const userMessage = this.buildUserMessage(text, prompt);
 
@@ -42,7 +44,7 @@ class OpenAIProvider implements AIProvider {
         { role: 'system', content: systemMessage },
         { role: 'user', content: userMessage },
       ],
-      temperature: 0.1, // Lower temperature for more consistent classification
+      temperature: temperature ?? 0.0,
     });
 
     const content = response.choices[0]?.message?.content || '';
@@ -53,9 +55,10 @@ class OpenAIProvider implements AIProvider {
   async batchClassify(
     text: string,
     prompts: { id: string; prompt: string }[],
-    constraints?: string
+    constraints?: string,
+    temperature?: number
   ): Promise<{ [id: string]: ClassificationResult }> {
-    const systemMessage = this.buildSystemMessage(constraints);
+    const systemMessage = this.buildSystemMessage(constraints, true);
     const userMessage = this.buildBatchUserMessage(text, prompts);
 
     const response = await this.client.chat.completions.create({
@@ -64,7 +67,7 @@ class OpenAIProvider implements AIProvider {
         { role: 'system', content: systemMessage },
         { role: 'user', content: userMessage },
       ],
-      temperature: 0.1,
+      temperature: temperature ?? 0.0,
       response_format: { type: 'json_object' },
     });
 
@@ -73,42 +76,32 @@ class OpenAIProvider implements AIProvider {
     return this.parseBatchResponse(content, prompts);
   }
 
-  private buildSystemMessage(constraints?: string): string {
-    let message = 'You are a classification assistant for social science research. ';
-    message += 'You will be given text to classify according to specific criteria. ';
-    message += 'Provide a numerical score and brief reasoning for your classification.';
+  private buildSystemMessage(constraints?: string, isBatch: boolean = false): string {
+    let message = 'You are a text classifier for social science research.';
+    
+    // Add JSON output format requirements for batch classification (coupled with parsing logic)
+    if (isBatch) {
+      message += '\n\nYou must respond with a JSON object where each key is a task ID and each value is an object with "classification" (string label) and "confidence" (number 0.0-1.0) fields.';
+    }
     
     if (constraints) {
-      message += `\n\nGlobal constraints:\n${constraints}`;
+      message += `\n\n${constraints}`;
     }
     
     return message;
   }
 
   private buildUserMessage(text: string, prompt: string): string {
-    return `Classification task: ${prompt}\n\nText to classify:\n${text}\n\nProvide your response in the following format:\nScore: [numerical score]\nReasoning: [brief explanation]`;
+    return `${prompt}\n\nText to classify:\n${text}`;
   }
 
   private buildBatchUserMessage(text: string, prompts: { id: string; prompt: string }[]): string {
     let message = 'Text to classify:\n' + text + '\n\n';
     message += 'Classification tasks:\n\n';
     
-    prompts.forEach((p, idx) => {
+    prompts.forEach((p) => {
       message += `[${p.id}] ${p.prompt}\n\n`;
     });
-    
-    message += `IMPORTANT: You must provide classifications for ALL ${prompts.length} tasks listed above.\n\n`;
-    message += 'Respond with a JSON object where each key is a task ID and each value is an object with "classification" (string label) and "confidence" (number 0.0-1.0) fields.\n\n';
-    message += 'Required task IDs:\n';
-    prompts.forEach((p) => {
-      message += `- ${p.id}\n`;
-    });
-    message += '\nExample format:\n';
-    message += '{\n';
-    prompts.forEach((p, idx) => {
-      message += `  "${p.id}": { "classification": "category_name", "confidence": 0.85 }${idx < prompts.length - 1 ? ',' : ''}\n`;
-    });
-    message += '}';
     
     return message;
   }

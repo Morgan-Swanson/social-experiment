@@ -96,7 +96,8 @@ export async function POST(
       const classifications = await aiProvider.batchClassify(
         text,
         classifierPrompts,
-        constraints
+        constraints,
+        study.temperature
       );
 
       results.push({
