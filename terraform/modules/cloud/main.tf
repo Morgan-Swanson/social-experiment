@@ -152,7 +152,8 @@ resource "aws_security_group" "db" {
 # RDS PostgreSQL Database
 resource "aws_db_subnet_group" "main" {
   name       = "${var.project_name}-db-subnet"
-  subnet_ids = [aws_subnet.private_a.id, aws_subnet.private_b.id]
+  # Use public subnets so RDS is reachable from Amplify Lambda (which runs outside VPC)
+  subnet_ids = [aws_subnet.public_a.id, aws_subnet.public_b.id]
 
   tags = {
     Name = "${var.project_name}-db-subnet"
