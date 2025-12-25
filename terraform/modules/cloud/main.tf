@@ -119,11 +119,22 @@ resource "aws_security_group" "db" {
   description = "Security group for RDS database"
   vpc_id      = aws_vpc.main.id
 
+  # Allow connections from within VPC
   ingress {
     from_port   = 5432
     to_port     = 5432
     protocol    = "tcp"
     cidr_blocks = [aws_vpc.main.cidr_block]
+  }
+
+  # Allow connections from anywhere (for Amplify Lambda which runs outside VPC)
+  # Database is protected by strong password authentication
+  ingress {
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow Amplify Lambda and external connections"
   }
 
   egress {
@@ -151,7 +162,9 @@ resource "aws_db_subnet_group" "main" {
 resource "random_password" "db_password" {
   length           = 32
   special          = true
-  override_special = "!#$%&*()-_=+[]{}<>:?"
+  # Avoid special characters that need URL encoding in PostgreSQL connection strings
+  # Excluded: : / ? # [ ] @ ! $ & ' ( ) * + , ; =
+  override_special = "_-."
 }
 
 resource "aws_db_instance" "postgres" {
@@ -277,7 +290,8 @@ resource "aws_secretsmanager_secret" "database_url" {
 
 resource "aws_secretsmanager_secret_version" "database_url" {
   secret_id = aws_secretsmanager_secret.database_url.id
-  secret_string = "postgresql://${aws_db_instance.postgres.username}:${random_password.db_password.result}@${aws_db_instance.postgres.endpoint}/${aws_db_instance.postgres.db_name}"
+  # URL-encode the password to handle any special characters safely
+  secret_string = "postgresql://${aws_db_instance.postgres.username}:${urlencode(random_password.db_password.result)}@${aws_db_instance.postgres.endpoint}/${aws_db_instance.postgres.db_name}"
 }
 
 resource "aws_secretsmanager_secret" "nextauth_secret" {
@@ -348,7 +362,7 @@ data "aws_caller_identity" "current" {}
 
 # Outputs
 output "database_url" {
-  value     = "postgresql://${aws_db_instance.postgres.username}:${random_password.db_password.result}@${aws_db_instance.postgres.endpoint}/${aws_db_instance.postgres.db_name}"
+  value     = "postgresql://${aws_db_instance.postgres.username}:${urlencode(random_password.db_password.result)}@${aws_db_instance.postgres.endpoint}/${aws_db_instance.postgres.db_name}"
   sensitive = true
 }
 
