@@ -127,16 +127,6 @@ resource "aws_security_group" "db" {
     cidr_blocks = [aws_vpc.main.cidr_block]
   }
 
-  # Allow connections from anywhere (for Amplify Lambda which runs outside VPC)
-  # Database is protected by strong password authentication
-  ingress {
-    from_port   = 5432
-    to_port     = 5432
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "Allow Amplify Lambda and external connections"
-  }
-
   egress {
     from_port   = 0
     to_port     = 0
@@ -152,8 +142,8 @@ resource "aws_security_group" "db" {
 # RDS PostgreSQL Database
 resource "aws_db_subnet_group" "main" {
   name       = "${var.project_name}-db-subnet"
-  # Use public subnets so RDS is reachable from Amplify Lambda (which runs outside VPC)
-  subnet_ids = [aws_subnet.public_a.id, aws_subnet.public_b.id]
+  # Keep database in private subnets; Amplify Gen 2 will access via VPC integration
+  subnet_ids = [aws_subnet.private_a.id, aws_subnet.private_b.id]
 
   tags = {
     Name = "${var.project_name}-db-subnet"
@@ -382,7 +372,7 @@ output "storage_bucket" {
 
 output "deployment_instructions" {
   value = <<-EOT
-    
+
     AWS Infrastructure Deployed Successfully!
     
     Infrastructure managed:
@@ -399,9 +389,5 @@ output "deployment_instructions" {
     Note: Amplify hosting is managed separately in AWS Console (Gen 2 app)
     
     Monthly Cost Estimate: $20-30 (excluding OpenAI API usage and Amplify hosting)
-  EOT
-}
-    
-    Monthly Cost Estimate: $20-30 (excluding OpenAI API usage)
   EOT
 }
